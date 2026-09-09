@@ -1,0 +1,1323 @@
+<title>ResolveIQ Customer Care Console</title>
+<style>
+/* ResolveIQ — customer service console
+   Visual language: warm cream ground, terracotta accent, heavy display numerals,
+   uppercase micro-labels, monospace for anything numeric. */
+
+:root {
+  --bg: #FBF0EC;
+  --surface: #FFFFFF;
+  --surface-2: #FBF5F2;
+  --border: #F1E0DA;
+  --border-strong: #E3CCC3;
+  --ink: #16110F;
+  --ink-2: #4B3C37;
+  --muted: #8B7A73;
+  --accent: #C1664F;
+  --accent-ink: #A4523E;
+  --accent-soft: #F5DED6;
+  --track: #F3E7E2;
+  --good: #4F7C55;
+  --good-soft: #E3EFE4;
+  --warn: #A9762E;
+  --warn-soft: #F7E9D3;
+  --bad: #B4463A;
+  --bad-soft: #F8DFDA;
+  --shadow: 0 1px 2px rgba(60, 30, 20, .05), 0 8px 24px rgba(60, 30, 20, .05);
+  --radius: 14px;
+  --radius-sm: 9px;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17120F;
+    --surface: #201915;
+    --surface-2: #281F1A;
+    --border: #372B25;
+    --border-strong: #4B3A32;
+    --ink: #F7EFEB;
+    --ink-2: #DDCEC7;
+    --muted: #A99089;
+    --accent: #E08A6E;
+    --accent-ink: #F0A98F;
+    --accent-soft: #40281F;
+    --track: #2F2620;
+    --good: #7FB187;
+    --good-soft: #23301F;
+    --warn: #D6A45C;
+    --warn-soft: #33291A;
+    --bad: #E08276;
+    --bad-soft: #3A211D;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .28);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #17120F;
+  --surface: #201915;
+  --surface-2: #281F1A;
+  --border: #372B25;
+  --border-strong: #4B3A32;
+  --ink: #F7EFEB;
+  --ink-2: #DDCEC7;
+  --muted: #A99089;
+  --accent: #E08A6E;
+  --accent-ink: #F0A98F;
+  --accent-soft: #40281F;
+  --track: #2F2620;
+  --good: #7FB187;
+  --good-soft: #23301F;
+  --warn: #D6A45C;
+  --warn-soft: #33291A;
+  --bad: #E08276;
+  --bad-soft: #3A211D;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .28);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 20px 64px;
+}
+
+/* ---------- shared atoms ---------- */
+
+.label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.pill--neutral { background: var(--surface-2); color: var(--ink-2); border-color: var(--border); }
+.pill--accent  { background: var(--accent-soft); color: var(--accent-ink); }
+.pill--good    { background: var(--good-soft); color: var(--good); }
+.pill--warn    { background: var(--warn-soft); color: var(--warn); }
+.pill--bad     { background: var(--bad-soft); color: var(--bad); }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 7px 12px;
+  font-weight: 600;
+  transition: background .12s ease, border-color .12s ease, transform .06s ease;
+}
+
+button:hover { background: var(--surface-2); }
+button:active { transform: translateY(1px); }
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button.primary:hover { background: var(--accent-ink); border-color: var(--accent-ink); }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.brand { display: flex; align-items: center; gap: 11px; }
+
+.brand__mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -.02em;
+  flex: none;
+}
+
+.brand__name {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+
+.brand__sub { margin: 1px 0 0; color: var(--muted); font-size: 12.5px; }
+
+.masthead__meta { display: flex; align-items: center; gap: 8px; }
+
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.live__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 3px var(--good-soft);
+}
+
+/* ---------- KPI row ---------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.kpi { padding: 15px 17px 16px; }
+
+.kpi__value {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  line-height: 1.05;
+  margin: 7px 0 5px;
+}
+
+.kpi__delta { font-size: 12px; font-weight: 650; }
+.kpi__delta--good { color: var(--good); }
+.kpi__delta--bad { color: var(--bad); }
+.kpi__delta--muted { color: var(--muted); }
+
+/* ---------- mid grid ---------- */
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 880px) {
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
+.panel { padding: 16px 18px 18px; }
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+/* intent bars */
+
+.bars { display: grid; gap: 11px; }
+
+.bar { display: grid; grid-template-columns: 132px 1fr auto; align-items: center; gap: 12px; }
+
+.bar__name {
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.bar__name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar__track {
+  height: 9px;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.bar__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width .4s cubic-bezier(.2, .8, .3, 1);
+}
+
+.bar__value { font-size: 12.5px; font-weight: 650; color: var(--ink-2); min-width: 62px; text-align: right; }
+
+@media (max-width: 520px) {
+  .bar { grid-template-columns: 108px 1fr auto; gap: 9px; }
+}
+
+/* gauge */
+
+.gauge { display: grid; place-items: center; gap: 2px; padding: 4px 0 2px; }
+
+.gauge__ring { position: relative; width: 158px; height: 158px; }
+.gauge__ring svg { transform: rotate(-90deg); display: block; }
+
+.gauge__center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 2px;
+}
+
+.gauge__pct { font-size: 31px; font-weight: 800; letter-spacing: -.03em; }
+.gauge__foot { margin-top: 10px; font-size: 13px; color: var(--ink-2); text-align: center; }
+.gauge__foot strong { color: var(--accent-ink); }
+
+/* ---------- queue ---------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 13px;
+}
+
+.search {
+  flex: 1 1 190px;
+  min-width: 150px;
+  padding: 8px 11px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.search::placeholder { color: var(--muted); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.chip {
+  padding: 6px 11px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+
+.table-scroll { overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; min-width: 720px; }
+
+thead th {
+  text-align: left;
+  padding: 0 10px 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; }
+tbody tr:last-child { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+tbody tr[aria-selected="true"] { background: var(--accent-soft); }
+
+tbody td { padding: 11px 10px; vertical-align: middle; }
+
+.cust { font-weight: 650; }
+.cust small { display: block; font-weight: 500; color: var(--muted); font-size: 11.5px; }
+.subject { color: var(--ink-2); max-width: 260px; }
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+}
+
+.dot--positive { background: var(--good); }
+.dot--neutral { background: var(--muted); }
+.dot--frustrated { background: var(--warn); }
+.dot--angry { background: var(--bad); }
+
+.sla { font-weight: 650; }
+.sla--ok { color: var(--good); }
+.sla--soon { color: var(--warn); }
+.sla--breach { color: var(--bad); }
+
+.empty { padding: 34px 10px; text-align: center; color: var(--muted); }
+
+/* ---------- detail drawer ---------- */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 15, 10, .34);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease;
+  z-index: 40;
+}
+
+.scrim.open { opacity: 1; pointer-events: auto; }
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(440px, 100%);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -18px 0 44px rgba(60, 30, 20, .14);
+  transform: translateX(100%);
+  transition: transform .22s cubic-bezier(.2, .8, .3, 1);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer.open { transform: none; }
+
+.drawer__head {
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.drawer__title { margin: 6px 0 3px; font-size: 17px; font-weight: 750; letter-spacing: -.01em; }
+.drawer__body { padding: 16px 18px 22px; overflow-y: auto; flex: 1; }
+
+.icon-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 19px;
+  line-height: 1;
+  padding: 4px 7px;
+}
+
+.section { margin-bottom: 20px; }
+.section > .label { display: block; margin-bottom: 9px; }
+
+.msg {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.msg--agent { background: var(--accent-soft); border-color: transparent; }
+.msg__who { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 3px; }
+.msg p { margin: 0; font-size: 13px; color: var(--ink-2); }
+
+.suggestion {
+  border: 1px solid var(--accent-soft);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 12px 13px;
+}
+
+.suggestion p { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); }
+
+.history { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+
+.history li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  padding-bottom: 7px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.history li:last-child { border-bottom: 0; padding-bottom: 0; }
+.history span { color: var(--muted); font-family: var(--mono); font-size: 11.5px; white-space: nowrap; }
+
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.facts div { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px; }
+.facts b { display: block; font-size: 14px; font-weight: 700; margin-top: 3px; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+
+.footnote {
+  margin: 22px 0 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+</style>
+
+<div class="wrap">
+
+    <header class="masthead">
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">R</div>
+        <div>
+          <h1 class="brand__name">ResolveIQ</h1>
+          <p class="brand__sub" id="team-line">Customer Care</p>
+        </div>
+      </div>
+      <div class="masthead__meta">
+        <span class="live"><span class="live__dot"></span> LIVE QUEUE</span>
+        <button id="reset" title="Restore the sample queue to its starting state">Reset demo</button>
+      </div>
+    </header>
+
+    <section class="kpis" id="kpis" aria-label="Today's performance"></section>
+
+    <div class="grid-2">
+      <section class="card panel" aria-labelledby="intent-h">
+        <div class="panel__head">
+          <span class="label" id="intent-h">Open tickets by intent</span>
+          <span class="label" id="intent-total"></span>
+        </div>
+        <div class="bars" id="bars"></div>
+      </section>
+
+      <section class="card panel" aria-labelledby="sla-h">
+        <div class="panel__head">
+          <span class="label" id="sla-h">SLA compliance</span>
+        </div>
+        <div class="gauge">
+          <div class="gauge__ring">
+            <svg width="158" height="158" viewBox="0 0 158 158" role="img" aria-labelledby="gauge-desc">
+              <title id="gauge-desc">Share of open tickets still inside their SLA window</title>
+              <circle cx="79" cy="79" r="66" fill="none" stroke="var(--track)" stroke-width="15"></circle>
+              <circle id="gauge-arc" cx="79" cy="79" r="66" fill="none" stroke="var(--accent)"
+                      stroke-width="15" stroke-linecap="round" stroke-dasharray="0 999"></circle>
+            </svg>
+            <div class="gauge__center">
+              <div class="gauge__pct num" id="gauge-pct">—</div>
+              <div class="label">within SLA</div>
+            </div>
+          </div>
+          <p class="gauge__foot" id="gauge-foot"></p>
+        </div>
+      </section>
+    </div>
+
+    <section class="card panel" aria-labelledby="queue-h">
+      <div class="panel__head">
+        <span class="label" id="queue-h">Live queue</span>
+        <span class="label" id="queue-count"></span>
+      </div>
+
+      <div class="toolbar">
+        <input class="search" id="search" type="search" placeholder="Search customer, subject or ticket ID"
+               aria-label="Search the queue">
+        <div class="chips" id="chips" role="group" aria-label="Filter by status"></div>
+      </div>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Ticket</th>
+              <th scope="col">Customer</th>
+              <th scope="col">Subject</th>
+              <th scope="col">Intent</th>
+              <th scope="col">Channel</th>
+              <th scope="col">Waiting</th>
+              <th scope="col">SLA</th>
+              <th scope="col">Owner</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="empty" hidden>Nothing matches that filter.</p>
+    </section>
+
+    <p class="footnote">Sample data — no tickets leave this page. Swap <code>assets/data.js</code> for your helpdesk API to go live.</p>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" aria-hidden="true">
+    <div class="drawer__head">
+      <div>
+        <span class="label" id="drawer-id"></span>
+        <h2 class="drawer__title" id="drawer-title"></h2>
+        <div id="drawer-pills" class="chips"></div>
+      </div>
+      <button class="icon-btn" id="drawer-close" aria-label="Close ticket details">&times;</button>
+    </div>
+    <div class="drawer__body" id="drawer-body"></div>
+  </aside>
+
+<script>
+/* Sample queue data for ResolveIQ.
+   Swap this file for a fetch() against your helpdesk API — the rest of the app
+   only depends on the shape of the objects below. */
+
+window.RESOLVEIQ_DATA = {
+  team: 'Customer Care · Tier 1',
+  currentAgent: 'You',
+
+  /* Rolling numbers the KPI row reads. Replace with live aggregates. */
+  metrics: {
+    resolvedToday: 218,
+    resolvedYesterday: 194,
+    autoResolvedPct: 71,
+    autoResolvedPrevPct: 64,
+    avgHandleMins: 6.4,
+    prevHandleMins: 9.4,
+    csat: 4.6,
+    prevCsat: 4.1,
+    slaTargetPct: 95
+  },
+
+  /* status: new | open | pending | resolved
+     sentiment: positive | neutral | frustrated | angry
+     waitMins: minutes since the customer last had a reply
+     slaMins: minutes allowed before the SLA is breached */
+  tickets: [
+    {
+      id: 'RQ-4821',
+      customer: 'Hannah Booth',
+      account: 'Retail · Order #88213',
+      channel: 'Chat',
+      subject: 'Parcel marked delivered but nothing arrived',
+      intent: 'Delivery',
+      sentiment: 'frustrated',
+      status: 'new',
+      waitMins: 4,
+      slaMins: 15,
+      assignee: null,
+      aiConfidence: 0.93,
+      aiSuggestion: 'Courier GPS shows the parcel left at a neighbouring address. Offer an immediate free replacement dispatched next-day, and open a courier investigation. Replacement stock is available.',
+      value: 68.40,
+      messages: [
+        { who: 'Hannah Booth', at: '09:12', text: 'Tracking says delivered at 8:40 but there is no parcel here and no card through the door.' },
+        { who: 'ResolveIQ', at: '09:12', text: 'Thanks Hannah — I can see order #88213. Checking the courier record now.', agent: true }
+      ],
+      history: [
+        { at: '12 Aug', text: 'Late delivery — resolved, goodwill credit £5' },
+        { at: '04 Jun', text: 'Sizing question — resolved same day' }
+      ]
+    },
+    {
+      id: 'RQ-4820',
+      customer: 'Dev Patel',
+      account: 'SaaS · Pro plan',
+      channel: 'Email',
+      subject: 'Charged twice for the March invoice',
+      intent: 'Billing',
+      sentiment: 'angry',
+      status: 'open',
+      waitMins: 22,
+      slaMins: 20,
+      assignee: 'Priya S.',
+      aiConfidence: 0.88,
+      aiSuggestion: 'Two successful charges on 01 Mar for £49.00. The duplicate is a retry after a webhook timeout. Refund the second charge and confirm the 3–5 working day window.',
+      value: 98.00,
+      messages: [
+        { who: 'Dev Patel', at: '08:41', text: 'This is the second month running. I have been charged £49 twice and nobody has come back to me.' }
+      ],
+      history: [
+        { at: '02 Feb', text: 'Duplicate charge — refunded' },
+        { at: '19 Jan', text: 'Plan upgrade — resolved' }
+      ]
+    },
+    {
+      id: 'RQ-4819',
+      customer: 'Marie Okafor',
+      account: 'Retail · Order #88104',
+      channel: 'Chat',
+      subject: 'Wants to return an unopened item past 30 days',
+      intent: 'Returns',
+      sentiment: 'neutral',
+      status: 'open',
+      waitMins: 9,
+      slaMins: 30,
+      assignee: 'You',
+      aiConfidence: 0.79,
+      aiSuggestion: 'Purchased 34 days ago, just outside policy. Customer has a clean returns record and £1,240 lifetime spend — policy allows a discretionary exception at Tier 1.',
+      value: 42.99,
+      messages: [
+        { who: 'Marie Okafor', at: '09:02', text: 'I bought this as a gift and it was never opened. Can I still send it back?' }
+      ],
+      history: [
+        { at: '11 Mar', text: 'Delivery address change — resolved' }
+      ]
+    },
+    {
+      id: 'RQ-4818',
+      customer: 'Tom Whitfield',
+      account: 'SaaS · Team plan',
+      channel: 'Voice',
+      subject: 'Cannot reset password, MFA device lost',
+      intent: 'Account',
+      sentiment: 'frustrated',
+      status: 'open',
+      waitMins: 16,
+      slaMins: 20,
+      assignee: null,
+      aiConfidence: 0.71,
+      aiSuggestion: 'Identity partially verified by phone. Requires a second factor before MFA reset — request the last four digits of the card on file, then trigger the recovery flow.',
+      value: 0,
+      messages: [
+        { who: 'Tom Whitfield', at: '08:58', text: 'New phone, old authenticator gone. I have a board pack to send this morning.' }
+      ],
+      history: [
+        { at: '27 Feb', text: 'Seat added — resolved' }
+      ]
+    },
+    {
+      id: 'RQ-4817',
+      customer: 'Aisha Rahman',
+      account: 'FMCG · Trade account',
+      channel: 'Email',
+      subject: 'Bulk order quote for 400 units',
+      intent: 'Sales',
+      sentiment: 'positive',
+      status: 'pending',
+      waitMins: 41,
+      slaMins: 240,
+      assignee: 'Jordan M.',
+      aiConfidence: 0.64,
+      aiSuggestion: 'Trade pricing sits outside Tier 1 authority above 250 units. Draft the quote at the standard trade band and route to the accounts team for sign-off.',
+      value: 3480.00,
+      messages: [
+        { who: 'Aisha Rahman', at: '08:20', text: 'Could you quote for 400 units delivered to our Leeds depot before month end?' }
+      ],
+      history: [
+        { at: '02 Apr', text: 'Quarterly order placed — resolved' },
+        { at: '14 Jan', text: 'Credit terms query — resolved' }
+      ]
+    },
+    {
+      id: 'RQ-4816',
+      customer: 'Greg Sanderson',
+      account: 'Retail · Order #87990',
+      channel: 'Chat',
+      subject: 'Item arrived damaged in transit',
+      intent: 'Delivery',
+      sentiment: 'frustrated',
+      status: 'new',
+      waitMins: 2,
+      slaMins: 15,
+      assignee: null,
+      aiConfidence: 0.95,
+      aiSuggestion: 'Photo attached shows crushed packaging. Auto-approve a replacement under the damage policy and issue a returns label — no need to recover the damaged unit.',
+      value: 129.00,
+      messages: [
+        { who: 'Greg Sanderson', at: '09:15', text: 'Box was crushed and the screen is cracked. Photo attached.' }
+      ],
+      history: []
+    },
+    {
+      id: 'RQ-4815',
+      customer: 'Lucy Fenwick',
+      account: 'SaaS · Starter plan',
+      channel: 'Email',
+      subject: 'How do I export my data to CSV?',
+      intent: 'Technical',
+      sentiment: 'neutral',
+      status: 'resolved',
+      waitMins: 0,
+      slaMins: 120,
+      assignee: 'Auto',
+      aiConfidence: 0.97,
+      aiSuggestion: 'Answered from the knowledge base: Settings → Data → Export. Confirmed delivered and marked resolved automatically.',
+      value: 0,
+      messages: [
+        { who: 'Lucy Fenwick', at: '07:44', text: 'Where is the CSV export hiding?' },
+        { who: 'ResolveIQ', at: '07:44', text: 'Settings → Data → Export, then pick a date range. The file lands in your inbox in a couple of minutes.', agent: true }
+      ],
+      history: []
+    },
+    {
+      id: 'RQ-4814',
+      customer: 'Owen Blake',
+      account: 'Retail · Order #87881',
+      channel: 'Voice',
+      subject: 'Refund not received after 10 days',
+      intent: 'Billing',
+      sentiment: 'angry',
+      status: 'open',
+      waitMins: 34,
+      slaMins: 20,
+      assignee: 'Priya S.',
+      aiConfidence: 0.83,
+      aiSuggestion: 'Refund was issued 10 days ago but failed at the acquirer — the card has since expired. Take updated card details or offer a bank transfer.',
+      value: 214.50,
+      messages: [
+        { who: 'Owen Blake', at: '08:30', text: 'Ten days and still nothing back. I want to know exactly when this is landing.' }
+      ],
+      history: [
+        { at: '18 Apr', text: 'Refund requested — approved' },
+        { at: '02 Apr', text: 'Order query — resolved' }
+      ]
+    },
+    {
+      id: 'RQ-4813',
+      customer: 'Sofia Nkemelu',
+      account: 'SaaS · Pro plan',
+      channel: 'Chat',
+      subject: 'API returning 429 on batch imports',
+      intent: 'Technical',
+      sentiment: 'neutral',
+      status: 'pending',
+      waitMins: 52,
+      slaMins: 120,
+      assignee: 'You',
+      aiConfidence: 0.58,
+      aiSuggestion: 'Account is hitting the 600 req/min ceiling in bursts. Suggest client-side batching; a limit increase needs platform sign-off — draft raised for review.',
+      value: 0,
+      messages: [
+        { who: 'Sofia Nkemelu', at: '08:12', text: 'Our nightly import keeps dying about 40% of the way through with 429s.' }
+      ],
+      history: [
+        { at: '29 Mar', text: 'Webhook retries — resolved' }
+      ]
+    },
+    {
+      id: 'RQ-4812',
+      customer: 'Callum Reid',
+      account: 'Retail · Order #87840',
+      channel: 'Email',
+      subject: 'Wrong size dispatched',
+      intent: 'Returns',
+      sentiment: 'neutral',
+      status: 'resolved',
+      waitMins: 0,
+      slaMins: 60,
+      assignee: 'Auto',
+      aiConfidence: 0.91,
+      aiSuggestion: 'Pick error confirmed against the packing record. Correct size dispatched free of charge with a prepaid return label.',
+      value: 55.00,
+      messages: [
+        { who: 'Callum Reid', at: '07:20', text: 'Ordered a medium, a small turned up.' }
+      ],
+      history: []
+    },
+    {
+      id: 'RQ-4811',
+      customer: 'Priyanka Shah',
+      account: 'FMCG · Trade account',
+      channel: 'Email',
+      subject: 'Invoice copy needed for August',
+      intent: 'Billing',
+      sentiment: 'positive',
+      status: 'resolved',
+      waitMins: 0,
+      slaMins: 240,
+      assignee: 'Auto',
+      aiConfidence: 0.99,
+      aiSuggestion: 'Invoice located and emailed to the address on file. No further action needed.',
+      value: 0,
+      messages: [
+        { who: 'Priyanka Shah', at: '07:05', text: 'Please could you resend the August invoice for our records?' }
+      ],
+      history: []
+    },
+    {
+      id: 'RQ-4810',
+      customer: 'Nathan Ellery',
+      account: 'Retail · Order #87802',
+      channel: 'Chat',
+      subject: 'Discount code rejected at checkout',
+      intent: 'Other',
+      sentiment: 'frustrated',
+      status: 'open',
+      waitMins: 12,
+      slaMins: 30,
+      assignee: null,
+      aiConfidence: 0.86,
+      aiSuggestion: 'Code SUMMER20 expired two days ago. Goodwill policy allows a one-off equivalent credit for customers with three or more orders — this customer has six.',
+      value: 76.20,
+      messages: [
+        { who: 'Nathan Ellery', at: '09:05', text: 'The code from your email will not apply. Am I doing something wrong?' }
+      ],
+      history: [
+        { at: '21 May', text: 'Loyalty points query — resolved' }
+      ]
+    }
+  ]
+};
+
+</script>
+<script>
+/* ResolveIQ console.
+   Vanilla JS, no build step. State lives in memory; the agent's own changes
+   (claim / resolve / snooze) are mirrored into localStorage so a refresh
+   doesn't lose them. */
+
+(function () {
+  'use strict';
+
+  var DATA = window.RESOLVEIQ_DATA;
+  var STORE_KEY = 'resolveiq.overrides.v1';
+  var ME = DATA.currentAgent;
+
+  var state = {
+    status: 'active',       // active | new | open | pending | resolved | all
+    query: '',
+    selected: null,
+    tickets: []
+  };
+
+  /* ---------- persistence (best effort — private mode, blocked storage) ---------- */
+
+  function loadOverrides() {
+    try {
+      return JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveOverrides() {
+    var out = {};
+    state.tickets.forEach(function (t) {
+      if (t._touched) out[t.id] = { status: t.status, assignee: t.assignee, waitMins: t.waitMins };
+    });
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(out));
+    } catch (e) { /* nothing to do — the session just won't survive a refresh */ }
+  }
+
+  function hydrate() {
+    var saved = loadOverrides();
+    state.tickets = DATA.tickets.map(function (t) {
+      var copy = Object.assign({}, t);
+      if (saved[t.id]) {
+        Object.assign(copy, saved[t.id]);
+        copy._touched = true;
+      }
+      return copy;
+    });
+  }
+
+  /* ---------- helpers ---------- */
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function isOpen(t) { return t.status !== 'resolved'; }
+
+  /* An SLA is breached once the customer has waited longer than the window. */
+  function slaState(t) {
+    if (!isOpen(t)) return 'ok';
+    var used = t.waitMins / t.slaMins;
+    if (used >= 1) return 'breach';
+    if (used >= 0.7) return 'soon';
+    return 'ok';
+  }
+
+  function slaLabel(t) {
+    if (!isOpen(t)) return 'met';
+    var left = t.slaMins - t.waitMins;
+    return left <= 0 ? 'breached' : left + 'm left';
+  }
+
+  function mins(n) { return n < 60 ? n + 'm' : Math.floor(n / 60) + 'h ' + (n % 60) + 'm'; }
+
+  function money(n) {
+    return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  /* ---------- KPI row ---------- */
+
+  function renderKpis() {
+    var m = DATA.metrics;
+    var open = state.tickets.filter(isOpen);
+    var breaching = open.filter(function (t) { return slaState(t) !== 'ok'; }).length;
+
+    var cards = [
+      {
+        label: 'Open tickets',
+        value: open.length,
+        delta: breaching + ' need attention',
+        tone: breaching ? 'bad' : 'good'
+      },
+      {
+        label: 'Resolved today',
+        value: m.resolvedToday,
+        delta: '↑ +' + (m.resolvedToday - m.resolvedYesterday) + ' vs yesterday',
+        tone: 'good'
+      },
+      {
+        label: 'Auto-resolved',
+        value: m.autoResolvedPct + '%',
+        delta: '↑ +' + (m.autoResolvedPct - m.autoResolvedPrevPct) + ' pts this month',
+        tone: 'good'
+      },
+      {
+        label: 'Avg handling time',
+        value: m.avgHandleMins + 'm',
+        delta: '↓ ' + (m.prevHandleMins - m.avgHandleMins).toFixed(1) + 'm faster',
+        tone: 'good'
+      },
+      {
+        label: 'CSAT',
+        value: m.csat.toFixed(1),
+        delta: '↑ from ' + m.prevCsat.toFixed(1) + ' last quarter',
+        tone: 'good'
+      }
+    ];
+
+    $('kpis').innerHTML = cards.map(function (c) {
+      return '<div class="card kpi">' +
+        '<div class="label">' + esc(c.label) + '</div>' +
+        '<div class="kpi__value num">' + esc(c.value) + '</div>' +
+        '<div class="kpi__delta kpi__delta--' + c.tone + '">' + esc(c.delta) + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  /* ---------- intent bars ---------- */
+
+  function renderBars() {
+    var open = state.tickets.filter(isOpen);
+    var counts = {};
+    open.forEach(function (t) { counts[t.intent] = (counts[t.intent] || 0) + 1; });
+
+    var rows = Object.keys(counts).map(function (k) {
+      return { name: k, n: counts[k] };
+    }).sort(function (a, b) { return b.n - a.n; });
+
+    var max = rows.reduce(function (m, r) { return Math.max(m, r.n); }, 1);
+    $('intent-total').textContent = open.length + ' open';
+
+    if (!rows.length) {
+      $('bars').innerHTML = '<p class="empty">Queue is clear. Nice work.</p>';
+      return;
+    }
+
+    $('bars').innerHTML = rows.map(function (r) {
+      var pct = Math.round((r.n / max) * 100);
+      var share = Math.round((r.n / open.length) * 100);
+      return '<div class="bar">' +
+        '<div class="bar__name"><span>' + esc(r.name) + '</span></div>' +
+        '<div class="bar__track"><div class="bar__fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="bar__value num">' + r.n + ' · ' + share + '%</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  /* ---------- SLA gauge ---------- */
+
+  function renderGauge() {
+    var open = state.tickets.filter(isOpen);
+    var within = open.filter(function (t) { return slaState(t) !== 'breach'; }).length;
+    var pct = open.length ? Math.round((within / open.length) * 100) : 100;
+
+    var r = 66;
+    var circumference = 2 * Math.PI * r;
+    var arc = $('gauge-arc');
+    arc.setAttribute('stroke-dasharray', (circumference * pct / 100).toFixed(1) + ' ' + circumference.toFixed(1));
+    arc.setAttribute('stroke', pct >= DATA.metrics.slaTargetPct ? 'var(--good)' : 'var(--accent)');
+
+    $('gauge-pct').textContent = pct + '%';
+    $('gauge-foot').innerHTML = '<strong>' + within + '</strong> of ' + open.length +
+      ' open tickets inside target · goal ' + DATA.metrics.slaTargetPct + '%';
+  }
+
+  /* ---------- queue table ---------- */
+
+  var FILTERS = [
+    { key: 'active', text: 'Active' },
+    { key: 'new', text: 'New' },
+    { key: 'open', text: 'Open' },
+    { key: 'pending', text: 'Pending' },
+    { key: 'resolved', text: 'Resolved' },
+    { key: 'all', text: 'All' }
+  ];
+
+  function renderChips() {
+    $('chips').innerHTML = FILTERS.map(function (f) {
+      return '<button class="chip" data-status="' + f.key + '" aria-pressed="' +
+        (state.status === f.key) + '">' + esc(f.text) + '</button>';
+    }).join('');
+  }
+
+  function visibleTickets() {
+    var q = state.query.trim().toLowerCase();
+    return state.tickets.filter(function (t) {
+      var statusOk =
+        state.status === 'all' ? true :
+        state.status === 'active' ? isOpen(t) :
+        t.status === state.status;
+      if (!statusOk) return false;
+      if (!q) return true;
+      return (t.customer + ' ' + t.subject + ' ' + t.id + ' ' + t.intent + ' ' + t.account)
+        .toLowerCase().indexOf(q) !== -1;
+    }).sort(function (a, b) {
+      /* Most urgent first: breaching before at-risk, then longest wait. */
+      var rank = { breach: 0, soon: 1, ok: 2 };
+      var d = rank[slaState(a)] - rank[slaState(b)];
+      if (d) return d;
+      return b.waitMins - a.waitMins;
+    });
+  }
+
+  function renderRows() {
+    var list = visibleTickets();
+    $('queue-count').textContent = list.length + (list.length === 1 ? ' ticket' : ' tickets');
+    $('empty').hidden = list.length > 0;
+
+    $('rows').innerHTML = list.map(function (t) {
+      var st = slaState(t);
+      return '<tr data-id="' + t.id + '" tabindex="0" aria-selected="' + (state.selected === t.id) + '">' +
+        '<td class="num">' + esc(t.id) + '</td>' +
+        '<td class="cust">' + esc(t.customer) + '<small>' + esc(t.account) + '</small></td>' +
+        '<td class="subject">' + esc(t.subject) + '</td>' +
+        '<td><span class="pill pill--neutral"><span class="dot dot--' + t.sentiment + '"></span>' +
+          esc(t.intent) + '</span></td>' +
+        '<td>' + esc(t.channel) + '</td>' +
+        '<td class="num">' + (isOpen(t) ? mins(t.waitMins) : '—') + '</td>' +
+        '<td class="sla sla--' + st + '">' + esc(slaLabel(t)) + '</td>' +
+        '<td>' + (t.assignee ? esc(t.assignee) : '<span class="pill pill--accent">Unassigned</span>') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  /* ---------- drawer ---------- */
+
+  var lastFocused = null;
+
+  function openDrawer(id) {
+    var t = state.tickets.filter(function (x) { return x.id === id; })[0];
+    if (!t) return;
+    state.selected = id;
+    lastFocused = document.activeElement;
+
+    $('drawer-id').textContent = t.id + ' · ' + t.channel;
+    $('drawer-title').textContent = t.subject;
+    $('drawer-pills').innerHTML =
+      '<span class="pill pill--neutral"><span class="dot dot--' + t.sentiment + '"></span>' +
+        esc(t.sentiment) + '</span>' +
+      '<span class="pill pill--neutral">' + esc(t.intent) + '</span>' +
+      '<span class="pill pill--' + (slaState(t) === 'breach' ? 'bad' : slaState(t) === 'soon' ? 'warn' : 'good') +
+        '">' + esc(slaLabel(t)) + '</span>';
+
+    var confidence = Math.round(t.aiConfidence * 100);
+
+    $('drawer-body').innerHTML =
+      '<div class="section">' +
+        '<div class="facts">' +
+          '<div><span class="label">Customer</span><b>' + esc(t.customer) + '</b></div>' +
+          '<div><span class="label">Account</span><b>' + esc(t.account) + '</b></div>' +
+          '<div><span class="label">Waiting</span><b class="num">' + (isOpen(t) ? mins(t.waitMins) : 'Resolved') + '</b></div>' +
+          '<div><span class="label">Order value</span><b class="num">' + (t.value ? money(t.value) : '—') + '</b></div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="section">' +
+        '<span class="label">Conversation</span>' +
+        t.messages.map(function (m) {
+          return '<div class="msg' + (m.agent ? ' msg--agent' : '') + '">' +
+            '<div class="msg__who">' + esc(m.who) + ' · ' + esc(m.at) + '</div>' +
+            '<p>' + esc(m.text) + '</p></div>';
+        }).join('') +
+      '</div>' +
+
+      '<div class="section">' +
+        '<span class="label">Suggested resolution</span>' +
+        '<div class="suggestion">' +
+          '<span class="pill pill--accent">' + confidence + '% confidence</span>' +
+          '<p>' + esc(t.aiSuggestion) + '</p>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="section">' +
+        '<span class="label">Previous contact' + (t.history.length ? '' : ' — none') + '</span>' +
+        (t.history.length
+          ? '<ul class="history">' + t.history.map(function (h) {
+              return '<li>' + esc(h.text) + '<span>' + esc(h.at) + '</span></li>';
+            }).join('') + '</ul>'
+          : '<p class="msg"><em>First time this customer has contacted us.</em></p>') +
+      '</div>' +
+
+      '<div class="actions">' +
+        (isOpen(t)
+          ? '<button class="primary" data-act="resolve">Send reply &amp; resolve</button>' +
+            (t.assignee === ME ? '' : '<button data-act="claim">Assign to me</button>') +
+            (t.status === 'pending' ? '' : '<button data-act="pending">Move to pending</button>')
+          : '<button data-act="reopen">Reopen ticket</button>') +
+      '</div>';
+
+    $('drawer').classList.add('open');
+    $('drawer').setAttribute('aria-hidden', 'false');
+    $('scrim').classList.add('open');
+    $('drawer-close').focus();
+    renderRows();
+  }
+
+  function closeDrawer() {
+    state.selected = null;
+    $('drawer').classList.remove('open');
+    $('drawer').setAttribute('aria-hidden', 'true');
+    $('scrim').classList.remove('open');
+    renderRows();
+    if (lastFocused && lastFocused.focus) lastFocused.focus();
+  }
+
+  function act(kind) {
+    var t = state.tickets.filter(function (x) { return x.id === state.selected; })[0];
+    if (!t) return;
+
+    if (kind === 'resolve') {
+      t.status = 'resolved';
+      t.waitMins = 0;
+      if (!t.assignee) t.assignee = ME;
+      DATA.metrics.resolvedToday += 1;
+    } else if (kind === 'claim') {
+      t.assignee = ME;
+      if (t.status === 'new') t.status = 'open';
+    } else if (kind === 'pending') {
+      t.status = 'pending';
+      if (!t.assignee) t.assignee = ME;
+    } else if (kind === 'reopen') {
+      t.status = 'open';
+      t.waitMins = 1;
+      DATA.metrics.resolvedToday = Math.max(0, DATA.metrics.resolvedToday - 1);
+    }
+
+    t._touched = true;
+    saveOverrides();
+    renderAll();
+
+    if (kind === 'resolve') closeDrawer();
+    else openDrawer(t.id);
+  }
+
+  /* ---------- wiring ---------- */
+
+  function renderAll() {
+    renderKpis();
+    renderBars();
+    renderGauge();
+    renderChips();
+    renderRows();
+  }
+
+  function init() {
+    $('team-line').textContent = DATA.team;
+    hydrate();
+    renderAll();
+
+    $('search').addEventListener('input', function (e) {
+      state.query = e.target.value;
+      renderRows();
+    });
+
+    $('chips').addEventListener('click', function (e) {
+      var btn = e.target.closest('.chip');
+      if (!btn) return;
+      state.status = btn.dataset.status;
+      renderChips();
+      renderRows();
+    });
+
+    $('rows').addEventListener('click', function (e) {
+      var tr = e.target.closest('tr');
+      if (tr) openDrawer(tr.dataset.id);
+    });
+
+    $('rows').addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var tr = e.target.closest('tr');
+      if (tr) { e.preventDefault(); openDrawer(tr.dataset.id); }
+    });
+
+    $('drawer-body').addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-act]');
+      if (btn) act(btn.dataset.act);
+    });
+
+    $('drawer-close').addEventListener('click', closeDrawer);
+    $('scrim').addEventListener('click', closeDrawer);
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && state.selected) closeDrawer();
+    });
+
+    $('reset').addEventListener('click', function () {
+      try { localStorage.removeItem(STORE_KEY); } catch (err) { /* ignore */ }
+      hydrate();
+      renderAll();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+
+</script>

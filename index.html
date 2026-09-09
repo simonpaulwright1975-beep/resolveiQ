@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ResolveIQ — Customer Care Console</title>
+  <meta name="description" content="Live support queue, SLA tracking and AI-drafted replies for a customer service team.">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <div class="wrap">
+
+    <header class="masthead">
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">R</div>
+        <div>
+          <h1 class="brand__name">ResolveIQ</h1>
+          <p class="brand__sub" id="team-line">Customer Care</p>
+        </div>
+      </div>
+      <div class="masthead__meta">
+        <span class="live"><span class="live__dot"></span> LIVE QUEUE</span>
+        <button id="reset" title="Restore the sample queue to its starting state">Reset demo</button>
+      </div>
+    </header>
+
+    <section class="kpis" id="kpis" aria-label="Today's performance"></section>
+
+    <div class="grid-2">
+      <section class="card panel" aria-labelledby="intent-h">
+        <div class="panel__head">
+          <span class="label" id="intent-h">Open tickets by intent</span>
+          <span class="label" id="intent-total"></span>
+        </div>
+        <div class="bars" id="bars"></div>
+      </section>
+
+      <section class="card panel" aria-labelledby="sla-h">
+        <div class="panel__head">
+          <span class="label" id="sla-h">SLA compliance</span>
+        </div>
+        <div class="gauge">
+          <div class="gauge__ring">
+            <svg width="158" height="158" viewBox="0 0 158 158" role="img" aria-labelledby="gauge-desc">
+              <title id="gauge-desc">Share of open tickets still inside their SLA window</title>
+              <circle cx="79" cy="79" r="66" fill="none" stroke="var(--track)" stroke-width="15"></circle>
+              <circle id="gauge-arc" cx="79" cy="79" r="66" fill="none" stroke="var(--accent)"
+                      stroke-width="15" stroke-linecap="round" stroke-dasharray="0 999"></circle>
+            </svg>
+            <div class="gauge__center">
+              <div class="gauge__pct num" id="gauge-pct">—</div>
+              <div class="label">within SLA</div>
+            </div>
+          </div>
+          <p class="gauge__foot" id="gauge-foot"></p>
+        </div>
+      </section>
+    </div>
+
+    <section class="card panel" aria-labelledby="queue-h">
+      <div class="panel__head">
+        <span class="label" id="queue-h">Live queue</span>
+        <span class="label" id="queue-count"></span>
+      </div>
+
+      <div class="toolbar">
+        <input class="search" id="search" type="search" placeholder="Search customer, subject or ticket ID"
+               aria-label="Search the queue">
+        <div class="chips" id="chips" role="group" aria-label="Filter by status"></div>
+      </div>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Ticket</th>
+              <th scope="col">Customer</th>
+              <th scope="col">Subject</th>
+              <th scope="col">Intent</th>
+              <th scope="col">Channel</th>
+              <th scope="col">Waiting</th>
+              <th scope="col">SLA</th>
+              <th scope="col">Owner</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="empty" hidden>Nothing matches that filter.</p>
+    </section>
+
+    <p class="footnote">Sample data — no tickets leave this page. Swap <code>assets/data.js</code> for your helpdesk API to go live.</p>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" aria-hidden="true">
+    <div class="drawer__head">
+      <div>
+        <span class="label" id="drawer-id"></span>
+        <h2 class="drawer__title" id="drawer-title"></h2>
+        <div id="drawer-pills" class="chips"></div>
+      </div>
+      <button class="icon-btn" id="drawer-close" aria-label="Close ticket details">&times;</button>
+    </div>
+    <div class="drawer__body" id="drawer-body"></div>
+  </aside>
+
+  <script src="assets/data.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
