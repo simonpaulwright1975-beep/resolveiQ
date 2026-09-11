@@ -128,6 +128,15 @@ export function mapCase(record) {
     pick(record, ['case_companyname', 'companyname'], null) ||
     '';
 
+  /* The Sage 200 account reference is what the central record joins on. Sage
+     CRM cases link to a CRM company, which may carry it under any of several
+     names depending on the install — so try them, and accept null. A case with
+     no account_ref is still saved, it just can't reach the customer timeline.
+     UNVERIFIED against the live CRM: confirm with `npm run check-sage`. */
+  const accountRef =
+    (company && pick(company, ['comp_accountid', 'account_ref', 'accountref', 'comp_code', 'comp_accountnumber'], null)) ||
+    pick(record, ['case_accountref', 'account_ref', 'accountref'], null);
+
   const priority = pick(record, ['case_priority', 'priority'], 'Medium');
   const opened = pick(record, ['case_opened', 'opened', 'case_createddate', 'createddate'], null);
   const status = mapStatus(pick(record, ['case_status', 'status', 'case_stage', 'stage'], ''));
@@ -139,6 +148,7 @@ export function mapCase(record) {
   return {
     id: reference ? String(reference) : `CASE-${id}`,
     crmId: id,
+    accountRef: accountRef ? String(accountRef) : null,
     customer,
     account: [companyName, reference ? `Case ${reference}` : null].filter(Boolean).join(' · ') || 'No account',
     channel: classify(CHANNEL_HINTS, channelSource, 'Email'),

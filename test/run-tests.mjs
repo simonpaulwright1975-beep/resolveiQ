@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
 import Anthropic from '@anthropic-ai/sdk';
-import { fakeSage, fakeAnthropic, SAGE_CASES, feed } from './fakes.mjs';
+import { fakeSage, fakeAnthropic, fakeStore, SAGE_CASES, feed } from './fakes.mjs';
 
 /* Config is read at import time, so the environment must be set before the
    modules under test are loaded. */
@@ -19,7 +19,12 @@ process.env.ANTHROPIC_API_KEY = 'test-key';
 process.env.RESOLVEIQ_MODEL = 'claude-opus-5';
 process.env.RESOLVEIQ_EFFORT = 'medium';
 
+const storeServer = await fakeStore();
+process.env.SUPABASE_URL = storeServer.url;
+process.env.SUPABASE_SERVICE_KEY = 'service-key-for-tests';
+
 const { SageClient, mapCase, pick, slaMinutesFor } = await import('../server/sage.mjs');
+const { upsertCase, ticketToCase, StoreError } = await import('../server/store.mjs');
 const { parseFeed } = await import('../server/sdata-xml.mjs');
 const { suggestForTicket, SuggestionError } = await import('../server/suggest.mjs');
 const { createApp } = await import('../server/index.mjs');
@@ -243,6 +248,77 @@ test('suggestForTicket() treats a refusal as an error, not an empty draft', asyn
   await api.close();
 });
 
+/* ---------- the central customer record ---------- */
+
+test('ticketToCase() maps a console ticket onto the case the database expects', () => {
+  const c = ticketToCase(
+    { id: 'CAS-0041', accountRef: '1 LE01', subject: 'Refund not received',
+      intent: 'Billing', channel: 'Email', sentiment: 'angry', priority: 'High',
+      status: 'resolved', assignee: 'priya@example.com', aiConfidence: 0.83,
+      aiSummary: 'Refund failed at the acquirer', nextSteps: ['Check acquirer', 'Update card'],
+      messages: [{ text: 'Ten days and still nothing back.' }] },
+    { agent: 'you@example.com', resolution: 'Refund re-issued' }
+  );
+  assert.equal(c.case_ref, 'CAS-0041');
+  assert.equal(c.account_ref, '1 LE01');
+  assert.equal(c.status, 'resolved');
+  assert.equal(c.priority, 'High');
+  assert.equal(c.resolution, 'Refund re-issued');
+  assert.equal(c.next_action, 'Check acquirer; Update card');
+  assert.equal(c.detail, 'Ten days and still nothing back.');
+  assert.equal(c.owner_email, 'priya@example.com');
+  assert.equal(c.source, 'resolveiq');
+});
+
+test('ticketToCase() leaves account_ref null rather than inventing one', () => {
+  const c = ticketToCase({ id: 'CASE-9', subject: 'No account on this one', status: 'open' });
+  assert.equal(c.account_ref, null);
+});
+
+test('upsertCase() posts the RPC payload with the service key, not in the URL', async () => {
+  await upsertCase({
+    case: { case_ref: 'T-1', subject: 'A case', status: 'open' },
+    event: { kind: 'note', body: 'hello' }
+  });
+  const sent = storeServer.received.at(-1);
+  assert.match(sent.path, /\/rest\/v1\/rpc\/resolveiq_upsert_case$/);
+  assert.equal(sent.headers.apikey, 'service-key-for-tests');
+  assert.equal(sent.headers.authorization, 'Bearer service-key-for-tests');
+  assert.equal(sent.body.payload.case.case_ref, 'T-1');
+  assert.equal(sent.body.payload.event.kind, 'note');
+});
+
+test('upsertCase() refuses a case with no reference or subject before calling out', async () => {
+  const before = storeServer.received.length;
+  await assert.rejects(() => upsertCase({ case: { subject: 'no ref' } }), (e) => {
+    assert.ok(e instanceof StoreError);
+    assert.equal(e.status, 400);
+    return true;
+  });
+  await assert.rejects(() => upsertCase({ case: { case_ref: 'X' } }), (e) => e.status === 400);
+  assert.equal(storeServer.received.length, before, 'must not hit the network for an invalid case');
+});
+
+test('upsertCase() turns an upstream rejection into an error, never a silent success', async () => {
+  const broken = await fakeStore({ failWith: 500 });
+  const { config } = await import('../server/config.mjs');
+  const realUrl = config.store.url;
+  config.store.url = broken.url;
+  try {
+    await assert.rejects(
+      () => upsertCase({ case: { case_ref: 'T-2', subject: 'will fail' } }),
+      (e) => {
+        assert.ok(e instanceof StoreError);
+        assert.match(e.message, /upstream refused/);
+        return true;
+      }
+    );
+  } finally {
+    config.store.url = realUrl;
+    await broken.close();
+  }
+});
+
 /* ---------- HTTP surface ---------- */
 
 async function withApp(fn) {
@@ -328,6 +404,87 @@ test('static files are served and path traversal is refused', async () => {
   });
 });
 
+test('POST /api/cases stores a console ticket and reports the company link', async () => {
+  await withApp(async (base) => {
+    const res = await fetch(`${base}/api/cases`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticket: { id: 'CAS-4814', accountRef: '1 LE01', subject: 'Refund not received',
+                  status: 'resolved', priority: 'High' },
+        agent: 'you@example.com',
+        resolution: 'Refund re-issued'
+      })
+    });
+    const body = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.case_ref, 'CAS-4814');
+    assert.equal(body.linked_to_company, true);
+    assert.equal(body.warning, null);
+
+    /* A resolution should also have been recorded as an outbound event. */
+    const sent = storeServer.received.at(-1).body.payload;
+    assert.equal(sent.event.direction, 'outbound');
+    assert.equal(sent.event.body, 'Refund re-issued');
+  });
+});
+
+test('POST /api/cases accepts a raw case from another producer', async () => {
+  await withApp(async (base) => {
+    const res = await fetch(`${base}/api/cases`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        case: { case_ref: 'CALLIQ-77', subject: 'Call summary', account_ref: '1 LE01' },
+        event: { kind: 'action', body: 'Discussed rebates' }
+      })
+    });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).case_ref, 'CALLIQ-77');
+  });
+});
+
+test('POST /api/cases warns when a case saved but could not be linked', async () => {
+  const unlinked = await fakeStore({ linked: false });
+  const { config } = await import('../server/config.mjs');
+  const realUrl = config.store.url;
+  config.store.url = unlinked.url;
+  try {
+    await withApp(async (base) => {
+      const res = await fetch(`${base}/api/cases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket: { id: 'CASE-9', subject: 'No account ref', status: 'resolved' } })
+      });
+      const body = await res.json();
+      assert.equal(body.linked_to_company, false);
+      assert.match(body.warning, /not linked to a customer/);
+    });
+  } finally {
+    config.store.url = realUrl;
+    await unlinked.close();
+  }
+});
+
+test('POST /api/cases rejects a body with neither ticket nor case', async () => {
+  await withApp(async (base) => {
+    const res = await fetch(`${base}/api/cases`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nothing: true })
+    });
+    assert.equal(res.status, 400);
+  });
+});
+
+test('GET /api/cases is rejected — it must be a POST', async () => {
+  await withApp(async (base) => {
+    assert.equal((await fetch(`${base}/api/cases`)).status, 405);
+  });
+});
+
 test.after(async () => {
   await sageServer.close();
+  await storeServer.close();
 });

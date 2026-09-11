@@ -37,7 +37,7 @@ source you're looking at — `SAGE CRM · LIVE`, `SAGE CRM · STALE`, or
 `SAMPLE DATA`.
 
 ```bash
-npm test                 # 26 tests, no credentials needed
+npm test                 # 36 tests, no credentials needed
 ```
 
 ## What's on the screen
@@ -110,6 +110,30 @@ automation rate — render as `—` with "not tracked in Sage CRM" rather than
 borrowing a number. Wire them to whatever system does hold them, or drop the
 tiles.
 
+## The central customer record
+
+Resolving a case writes it to the shared WG customer record in Supabase — see
+`db/README.md`. That write is what puts the case on the customer's timeline, so
+it is the point of the app rather than a side effect.
+
+Writes go through one database function, `public.resolveiq_upsert_case`, not
+straight at the tables. Three reasons: the `core` schema is not in Supabase's
+exposed-schemas list so `/rest/v1/cases` would 404; validation and the lifecycle
+timestamps belong in one place rather than in every producer; and it is
+idempotent on `case_ref`, so retrying after a timeout is safe.
+
+**Resolving saves first and only then marks the case done.** If the write fails,
+the case stays open and the advisor is told it has not been resolved. Showing a
+case as finished when nothing was recorded is the exact failure this app exists
+to prevent, so it is not allowed to happen quietly.
+
+A case that saves but cannot be matched to a customer is still stored — losing
+it would be worse — but the response says so, because an unlinked case never
+reaches the timeline.
+
+`POST /api/cases` also accepts a raw case, so Call iQ can post call summaries to
+the same endpoint without knowing anything about the console's shapes.
+
 ### Writes need SOAP, not SData
 
 SData is read-only. Creating or updating records goes through the SOAP endpoint
@@ -148,6 +172,7 @@ model inside the same call, add the `fallbacks` parameter — see the
 | `GET` | `/api/health` | What's configured and whether the CRM answers. Credentials are redacted. |
 | `GET` | `/api/tickets` | The queue. Cached for `SAGE_CACHE_SECONDS`; serves the last good result if the CRM goes down. |
 | `POST` | `/api/suggest` | `{ "ticket": {...} }` → a drafted resolution. |
+| `POST` | `/api/cases` | Write a case to the central customer record. Takes `{ "ticket": {...}, "resolution": "..." }` from the console, or `{ "case": {...}, "event": {...} }` from any other producer. |
 
 ## Configuration
 
@@ -168,7 +193,7 @@ App settings are namespaced `RESOLVEIQ_*` so they can't collide with an ambient
 
 ## Testing
 
-`npm test` runs 26 tests against fake Sage CRM and Anthropic servers that speak
+`npm test` runs 36 tests against fake Sage CRM and Anthropic servers that speak
 the real wire formats, so the client code, mapping, HTTP surface and error paths
 are all exercised without credentials or network access.
 

@@ -5,6 +5,7 @@
      GET  /api/health            what is configured and reachable
      GET  /api/tickets           the queue (Sage CRM, or sample data)
      POST /api/suggest           draft a resolution for one ticket
+     POST /api/cases             write a case to the central customer record
 
    Credentials live here and only here. The browser never receives the Sage
    password or the Anthropic API key. */
@@ -13,9 +14,10 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { config, sageConfigured, claudeConfigured } from './config.mjs';
+import { config, sageConfigured, claudeConfigured, storeConfigured } from './config.mjs';
 import { SageClient } from './sage.mjs';
 import { suggestForTicket, SuggestionError } from './suggest.mjs';
+import { upsertCase, ticketToCase, StoreError } from './store.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const sage = sageConfigured ? new SageClient() : null;
@@ -160,7 +162,8 @@ export function createApp() {
         return sendJson(res, 200, {
           ok: true,
           sage: { configured: sageConfigured, reachable: sageReachable, baseUrl: redact(config.sage.baseUrl) },
-          claude: { configured: claudeConfigured, model: claudeConfigured ? config.claude.model : null }
+          claude: { configured: claudeConfigured, model: claudeConfigured ? config.claude.model : null },
+          store: { configured: storeConfigured, url: storeConfigured ? config.store.url : null }
         });
       }
 
@@ -186,6 +189,55 @@ export function createApp() {
 
         const suggestion = await suggestForTicket(ticket);
         return sendJson(res, 200, suggestion);
+      }
+
+      /* Write a case to the central customer record.
+         Accepts either a console ticket ({ ticket, resolution, event }) or a
+         case straight from another producer ({ case, event }), so Call iQ and
+         anything else can post here without knowing the console's shapes. */
+      if (url.pathname === '/api/cases') {
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'Use POST' });
+
+        const body = await readBody(req);
+
+        let caseFields = body?.case;
+        let event = body?.event ?? null;
+
+        if (!caseFields && body?.ticket) {
+          caseFields = ticketToCase(body.ticket, {
+            agent: body.agent,
+            resolution: body.resolution
+          });
+          if (!event && body.resolution) {
+            event = {
+              kind: 'customer_message',
+              direction: 'outbound',
+              author: body.agent || body.ticket.assignee || 'resolveiq',
+              body: body.resolution
+            };
+          }
+        }
+
+        if (!caseFields) {
+          return sendJson(res, 400, {
+            error: 'Send { "ticket": {...} } or { "case": {...} }.'
+          });
+        }
+
+        const saved = await upsertCase({ case: caseFields, event });
+
+        /* Say plainly when the case saved but could not be attached to a
+           customer — an unlinked case never reaches the timeline, and silently
+           dropping it off the customer's record is exactly the failure this
+           whole exercise is meant to prevent. */
+        return sendJson(res, 200, {
+          ok: true,
+          case_ref: saved?.case?.case_ref ?? caseFields.case_ref,
+          linked_to_company: Boolean(saved?.linked_to_company),
+          warning: saved?.linked_to_company
+            ? null
+            : 'Saved, but not linked to a customer — it will not appear on their timeline. The case has no account reference.'
+        });
       }
 
       if (url.pathname.startsWith('/api/')) {

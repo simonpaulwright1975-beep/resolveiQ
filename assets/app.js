@@ -16,7 +16,10 @@
     selected: null,
     tickets: [],
     drafting: false,        // a /api/suggest call is in flight
-    draftError: null
+    draftError: null,
+    saving: false,          // a /api/cases call is in flight
+    saveError: null,
+    saveNote: null          // e.g. saved but not linked to a customer
   };
 
   /* ---------- persistence (best effort — private mode, blocked storage) ---------- */
@@ -261,6 +264,33 @@
     }).join('');
   }
 
+  /* ---------- writing to the customer record ---------- */
+
+  /* Returns { ok, warning } or { ok: false, error }. Never throws — the caller
+     decides what to do about a failure, and a failure must never be silent. */
+  async function saveCase(ticket, overrides) {
+    var payload = {
+      ticket: Object.assign({}, ticket, overrides || {}),
+      agent: ME,
+      resolution: ticket.aiSuggestion || null
+    };
+
+    try {
+      var response = await fetch('/api/cases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      var body = await response.json().catch(function () { return {}; });
+      if (!response.ok) {
+        return { ok: false, error: body.error || ('Could not save — HTTP ' + response.status) };
+      }
+      return { ok: true, warning: body.warning || null };
+    } catch (error) {
+      return { ok: false, error: 'Could not save to the customer record — ' + error.message };
+    }
+  }
+
   /* ---------- suggested resolution ---------- */
 
   function suggestionHtml(t) {
@@ -384,8 +414,16 @@
           : '<p class="msg"><em>First time this customer has contacted us.</em></p>') +
       '</div>' +
 
+      (state.saveError
+        ? '<p class="draft-error">' + esc(state.saveError) + '</p>' +
+          '<p class="draft-error">The case has NOT been resolved. Try again, or tell whoever runs the app.</p>'
+        : '') +
+      (state.saveNote ? '<p class="save-note">' + esc(state.saveNote) + '</p>' : '') +
+
       '<div class="actions">' +
-        (isOpen(t)
+        (state.saving
+          ? '<button class="primary" disabled>Saving to the customer record…</button>'
+          : isOpen(t)
           ? '<button class="primary" data-act="resolve">Send reply &amp; resolve</button>' +
             (t.assignee === ME ? '' : '<button data-act="claim">Assign to me</button>') +
             (t.status === 'pending' ? '' : '<button data-act="pending">Move to pending</button>')
@@ -408,11 +446,29 @@
     if (lastFocused && lastFocused.focus) lastFocused.focus();
   }
 
-  function act(kind) {
+  async function act(kind) {
     var t = state.tickets.filter(function (x) { return x.id === state.selected; })[0];
-    if (!t) return;
+    if (!t || state.saving) return;
 
     if (kind === 'resolve') {
+      /* Write to the customer record FIRST. If it doesn't save there, the
+         case is not resolved — showing it as done when nothing was recorded
+         is the one failure this app exists to prevent. */
+      state.saving = true;
+      state.saveError = null;
+      state.saveNote = null;
+      openDrawer(t.id);
+
+      var outcome = await saveCase(t, { status: 'resolved' });
+      state.saving = false;
+
+      if (!outcome.ok) {
+        state.saveError = outcome.error;
+        openDrawer(t.id);
+        return;
+      }
+
+      state.saveNote = outcome.warning || null;
       t.status = 'resolved';
       t.waitMins = 0;
       if (!t.assignee) t.assignee = ME;

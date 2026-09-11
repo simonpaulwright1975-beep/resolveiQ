@@ -206,3 +206,34 @@ export function feed(records, entityName) {
 ${entries}
 </feed>`;
 }
+
+/* Stand-in for the Supabase PostgREST RPC endpoint. Records what was posted so
+   tests can assert the payload, and can be told to fail. */
+export function fakeStore({ failWith = null, linked = true } = {}) {
+  const received = [];
+  const cases = new Map();
+
+  return startServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {};
+    received.push({ path: req.url, headers: req.headers, body });
+
+    if (failWith) {
+      res.writeHead(failWith, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: 'upstream refused' }));
+      return;
+    }
+
+    const c = body?.payload?.case || {};
+    /* Mimic the function's idempotency on case_ref. */
+    const existing = cases.get(c.case_ref);
+    const stored = Object.assign({ id: 'uuid-' + cases.size }, existing, c, {
+      resolved_at: c.status === 'resolved' ? new Date().toISOString() : null
+    });
+    cases.set(c.case_ref, stored);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ case: stored, linked_to_company: linked }));
+  }).then((s) => Object.assign(s, { received, cases }));
+}

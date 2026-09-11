@@ -54,6 +54,13 @@ export const config = {
     allowInsecureTls: process.env.SAGE_ALLOW_INSECURE_TLS === 'true'
   },
 
+  /* The central customer record. The service key bypasses row level security,
+     so it lives here and never goes near a browser. */
+  store: {
+    url: process.env.SUPABASE_URL || '',
+    serviceKey: process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  },
+
   claude: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
     model: process.env.RESOLVEIQ_MODEL || 'claude-opus-5',
@@ -78,4 +85,5 @@ export const config = {
 };
 
 export const sageConfigured = Boolean(config.sage.baseUrl && config.sage.user);
+export const storeConfigured = Boolean(config.store.url && config.store.serviceKey);
 export const claudeConfigured = Boolean(config.claude.apiKey);
