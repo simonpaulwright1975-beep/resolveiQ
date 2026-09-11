@@ -31,7 +31,8 @@ console.log(`\nTarget: ${config.sage.baseUrl}`);
 console.log(`User:   ${config.sage.user}\n`);
 
 const client = new SageClient();
-let failures = 0;
+let failures = 0;   /* blocks the queue working at all */
+let warnings = 0;   /* blocks the customer-card work, not the queue */
 
 /* 1 — can we reach it at all, and what does it speak? */
 console.log('1. Reachability and format');
@@ -83,25 +84,56 @@ if (all.length) {
   console.log(info(entitiesBody.slice(0, 400).replace(/\n/g, ' ')));
 }
 
-/* 3 — what fields does a case actually have here? Names only. */
-console.log('\n3. Case fields on this install (names only, no values)');
+/* 3 — what fields do the entities we need actually have here? Names only.
+   company/person/communication matter as much as case: the customer-card work
+   reads and writes those. */
+console.log('\n3. Field names per entity (names only, no values)');
+
+const NEEDED = [
+  ['case', 'the support queue'],
+  ['company', 'customer cards'],
+  ['person', 'contacts on a card'],
+  ['communication', 'call summaries and contact history']
+];
+
+let caseRecords = [];
+
+for (const [entity, why] of NEEDED) {
+  try {
+    const raw = await client.request(entity, { params: { count: 3 } });
+    const { total, records } = client.parse(raw);
+
+    if (entity === 'case') caseRecords = records;
+
+    console.log(ok(`${entity} — readable, ${total} record(s) reported  (${why})`));
+
+    if (records.length) {
+      const flat = [];
+      const linked = [];
+      for (const [k, v] of Object.entries(records[0])) {
+        if (v && typeof v === 'object') linked.push(`${k}{${Object.keys(v).join(',')}}`);
+        else flat.push(k);
+      }
+      console.log(info(`  fields: ${flat.sort().join(', ')}`));
+      if (linked.length) console.log(info(`  linked: ${linked.join(' ')}`));
+    } else {
+      console.log(info('  no records returned — readable but empty, or not visible to this user'));
+    }
+  } catch (error) {
+    /* Only case blocks the queue; the others block the customer-card work. */
+    if (entity === 'case') failures++;
+    else warnings++;
+    console.log(bad(`${entity} — ${error.message}  (needed for ${why})`));
+  }
+}
+
+/* 4 — does the case mapping find what it needs? */
 try {
-  const raw = await client.request('case', { params: { count: 3 } });
-  const { total, records } = client.parse(raw);
-  console.log(ok(`read ${records.length} case record(s); server reports ${total} total`));
+  const records = caseRecords;
 
   if (records.length) {
-    const flat = [];
-    const linked = [];
-    for (const [k, v] of Object.entries(records[0])) {
-      if (v && typeof v === 'object') linked.push(`${k}{${Object.keys(v).join(',')}}`);
-      else flat.push(k);
-    }
-    console.log(info(`fields:  ${flat.sort().join(', ')}`));
-    if (linked.length) console.log(info(`linked:  ${linked.join(' ')}`));
 
-    /* 4 — does the mapping find what it needs? */
-    console.log('\n4. Field mapping');
+    console.log('\n4. Case field mapping');
     const { mapCase } = await import('../server/sage.mjs');
     const ticket = mapCase(records[0]);
     const checks = [
@@ -111,6 +143,7 @@ try {
       ['status', ticket.status, true],
       ['priority → SLA', `${ticket.priority} → ${ticket.slaMins}m`, ticket.slaMins > 0]
     ];
+    let mappingProblems = 0;
     for (const [label, value, good] of checks) {
       /* The subject and customer are real data, so show only whether they
          resolved — not what they say. */
@@ -118,22 +151,34 @@ try {
         ? good ? 'resolved' : 'NOT FOUND'
         : value;
       console.log(good ? ok(`${label}: ${shown}`) : bad(`${label}: ${shown}`));
-      if (!good) failures++;
+      if (!good) { failures++; mappingProblems++; }
     }
-    if (failures) {
+    if (mappingProblems) {
       console.log(info('\nAnything marked FAIL means this install names that column'));
       console.log(info('differently. Send me the field list from section 3 and I will'));
       console.log(info('add the right names to mapCase() in server/sage.mjs.'));
     }
   } else {
-    console.log(info('No case records came back — the entity is readable but empty,'));
-    console.log(info('or the API user cannot see any cases.'));
+    console.log('\n4. Case field mapping');
+    console.log(info('skipped — no case records to map.'));
   }
 } catch (error) {
   failures++;
-  console.log(bad(`reading cases failed — ${error.message}`));
+  console.log(bad(`mapping check failed — ${error.message}`));
 }
 
 console.log('\n' + '='.repeat(52));
-console.log(failures ? `${failures} problem(s) found.\n` : 'All checks passed — npm start will serve live cases.\n');
+
+if (failures) {
+  console.log(`${failures} problem(s) blocking the live queue.`);
+} else {
+  console.log('Queue: ready — npm start will serve live cases.');
+}
+
+if (warnings) {
+  console.log(`${warnings} entity/entities needed for customer cards are not readable.`);
+  console.log('The queue will still work; the customer-card features will not.');
+}
+
+console.log('');
 process.exit(failures ? 1 : 0);
