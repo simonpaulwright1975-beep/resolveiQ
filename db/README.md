@@ -6,13 +6,36 @@ app in the estate.
 
 ## Status
 
-**Nothing here has been applied.** These migrations are for review first —
-`0001` adds a schema to a live database that several applications already use.
+**Applied to WG Main.**
 
 | File | What it does |
 |---|---|
 | `0001_core_customer_record.sql` | Creates the `core` schema: companies, contacts, cases, case events, and the customer timeline view. Additive only — it alters no existing table. |
 | `0002_backfill_companies_from_sage.sql` | Populates `core.companies` from the 2,669 customers already synced in `public.sage_customers`. Re-runnable; never overwrites rows edited by hand. |
+| `0003_null_unknown_company_status.sql` | Corrects 0002: company status was being asserted from a Sage column that turned out to hold one value for every row. |
+
+Live counts after applying:
+
+| | |
+|---|---|
+| `core.companies` | 2,669 (2,150 with a phone, 2,557 with an email) |
+| `core.contacts` | 0 — the Sage person sync has not run |
+| `core.cases` | 0 — nothing writes them yet |
+| `core.customer_timeline` | 27,824 rows across 1,693 accounts |
+
+Timeline by source: `sage_crm` 26,388 · `calliq` 1,426 · `reorderradar` 10 ·
+`resolveiq` 0. 1,671 of those accounts match a company row.
+
+## Gaps found in the source data
+
+Two things the customer card needs that Sage is not currently supplying. Both
+are sync problems on WG-SQL-01, not schema problems:
+
+- **Addresses are empty.** `sage_customers` has `address_line1`, `town` and
+  `postcode` columns and all 2,669 rows are blank. No company has an address.
+- **Customer status is unknowable.** `account_status` is `0` for every row, and
+  `sage_orders` holds open orders only, so lapsed cannot be inferred from order
+  recency either. Status is left NULL rather than guessed.
 
 ## Why `core` and not `resolveiq_*`
 

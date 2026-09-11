@@ -27,10 +27,10 @@ select
   nullif(trim(s.address_line2), ''),
   nullif(trim(s.town), ''),
   nullif(trim(s.postcode), ''),
-  /* Sage account_status is an integer flag; 0 is the usual "open" value.
-     Anything else is treated as not currently trading until we confirm the
-     install's own meaning for the other values. */
-  case when s.account_status = 0 then 'customer' else 'closed' end,
+  /* Deliberately NULL. account_status is 0 for all 2,669 rows on this
+     install — a single distinct value carries no information, and a blank
+     status is better than a confident wrong one. See 0003. */
+  null,
   'sage'
 from public.sage_customers s
 where s.account_ref is not null
@@ -44,7 +44,6 @@ on conflict (account_ref) do update set
   address_line2    = coalesce(excluded.address_line2, core.companies.address_line2),
   town             = coalesce(excluded.town, core.companies.town),
   postcode         = coalesce(excluded.postcode, core.companies.postcode),
-  status           = excluded.status,
   updated_at       = now()
 where core.companies.source = 'sage';
 
