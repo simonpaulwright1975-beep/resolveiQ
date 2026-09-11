@@ -5,12 +5,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
 import Anthropic from '@anthropic-ai/sdk';
-import { fakeSage, fakeAnthropic, SAGE_CASES } from './fakes.mjs';
+import { fakeSage, fakeAnthropic, SAGE_CASES, feed } from './fakes.mjs';
 
 /* Config is read at import time, so the environment must be set before the
    modules under test are loaded. */
 const sageServer = await fakeSage();
-process.env.SAGE_BASE_URL = `${sageServer.url}/sdata/CRMj/sagecrm2/-/`;
+process.env.SAGE_BASE_URL = `${sageServer.url}/sdata/crmj/sagecrm/-/`;
 process.env.SAGE_USER = 'apiuser';
 process.env.SAGE_PASSWORD = 'secret';
 process.env.SAGE_CACHE_SECONDS = '0';
@@ -20,6 +20,7 @@ process.env.RESOLVEIQ_MODEL = 'claude-opus-5';
 process.env.RESOLVEIQ_EFFORT = 'medium';
 
 const { SageClient, mapCase, pick, slaMinutesFor } = await import('../server/sage.mjs');
+const { parseFeed } = await import('../server/sdata-xml.mjs');
 const { suggestForTicket, SuggestionError } = await import('../server/suggest.mjs');
 const { createApp } = await import('../server/index.mjs');
 
@@ -100,7 +101,7 @@ test('SageClient.tickets() returns mapped tickets', async () => {
 
 test('SageClient surfaces HTTP failures with status and body', async () => {
   const broken = await fakeSage({ failWith: 503 });
-  const client = new SageClient({ baseUrl: `${broken.url}/sdata/CRMj/sagecrm2/-/`, user: 'u', password: 'p' });
+  const client = new SageClient({ baseUrl: `${broken.url}/sdata/crmj/sagecrm/-/`, user: 'u', password: 'p' });
   await assert.rejects(() => client.tickets(), (err) => {
     assert.equal(err.status, 503);
     assert.match(err.message, /Sage CRM 503/);
@@ -118,6 +119,70 @@ test('SageClient sends the password in the Basic header and surfaces a 401', asy
   /* And the correct password is accepted — proving the header is really checked. */
   const right = new SageClient();
   assert.equal((await right.tickets()).length, 3);
+});
+
+/* ---------- SData Atom XML ---------- */
+
+test('parseFeed() reads the Atom envelope counts', () => {
+  const { total, startIndex, perPage, records } = parseFeed(feed(SAGE_CASES, 'case'));
+  assert.equal(total, 3);
+  assert.equal(startIndex, 1);
+  assert.equal(perPage, 3);
+  assert.equal(records.length, 3);
+});
+
+test('parseFeed() flattens a payload into the record shape mapCase() expects', () => {
+  const [first] = parseFeed(feed([SAGE_CASES[0]], 'case')).records;
+  assert.equal(first.$key, 41);
+  assert.equal(first.case_referenceid, 'CAS-0041');
+  assert.equal(first.case_description, 'Refund not received after 10 days');
+  assert.equal(first.case_priority, 'High');
+});
+
+test('parseFeed() keeps linked entities as nested objects with a title', () => {
+  const [first] = parseFeed(feed([SAGE_CASES[0]], 'case')).records;
+  assert.equal(typeof first.Company, 'object');
+  assert.equal(first.Company.$key, 7);
+  assert.equal(first.Company.$title, 'Blake Retail Ltd');
+  assert.equal(first.Person.$title, 'Owen Blake');
+});
+
+test('XML records map to exactly the same tickets as the JSON shape did', () => {
+  const fromXml = parseFeed(feed(SAGE_CASES, 'case')).records.map(mapCase);
+  const fromJson = SAGE_CASES.map(mapCase);
+  assert.equal(fromXml.length, fromJson.length);
+  for (let i = 0; i < fromXml.length; i++) {
+    /* waitMins is clock-derived, so compare everything else. */
+    const { waitMins: xw, ...x } = fromXml[i];
+    const { waitMins: jw, ...j } = fromJson[i];
+    assert.deepEqual(x, j, `ticket ${i} differs between XML and JSON paths`);
+    assert.ok(Math.abs(xw - jw) <= 1);
+  }
+});
+
+test('parseFeed() survives an empty feed and a malformed payload', () => {
+  assert.deepEqual(parseFeed(feed([], 'case')).records, []);
+  const odd = parseFeed('<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>');
+  assert.deepEqual(odd.records, []);
+});
+
+test('the client sends an XML-first Accept header', async () => {
+  let seen = null;
+  const probe = await fakeSage({ onRequest: (req) => { seen = req.headers.accept; } });
+  const client = new SageClient({ baseUrl: `${probe.url}/sdata/crmj/sagecrm/-/` });
+  await client.tickets();
+  assert.match(seen, /application\/atom\+xml/);
+  assert.ok(seen.indexOf('atom+xml') < seen.indexOf('json'), 'XML must be preferred over JSON');
+  await probe.close();
+});
+
+test('the client still accepts a JSON install', async () => {
+  const jsonServer = await fakeSage({ format: 'json' });
+  const client = new SageClient({ baseUrl: `${jsonServer.url}/sdata/crmj/sagecrm/-/` });
+  const tickets = await client.tickets();
+  assert.equal(tickets.length, 3);
+  assert.equal(tickets[0].id, 'CAS-0041');
+  await jsonServer.close();
 });
 
 /* ---------- Claude suggestion ---------- */

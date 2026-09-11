@@ -6,13 +6,29 @@ what's about to breach SLA, and what the AI layer suggests doing about it.
 Cases come from **Sage CRM**. Draft replies come from **Claude**. Neither
 credential ever reaches the browser.
 
+## Where this has to run
+
+**Sage CRM is LAN-only.** It lives at `http://WG-SQL-01/...`, which is not
+reachable from outside the Geerings network. So this app's server must run on
+WG-SQL-01 or another machine on that LAN. A cloud-hosted copy will always fall
+back to sample data, however it is configured.
+
+Claude drafting needs outbound HTTPS to `api.anthropic.com`, so whichever box
+runs it needs the CRM on one side and the internet on the other.
+
 ## Running it
 
 ```bash
 npm install
 cp .env.example .env     # fill in your Sage CRM details and API key
+npm run check-sage       # verify the connection before starting
 npm start                # http://localhost:3000
 ```
+
+`npm run check-sage` reports what the CRM actually returns: whether it answers,
+which entities are exposed to web services, the field names on the case entity,
+and whether the mapping resolves them. It prints **names and counts only, never
+field values**, so the output is safe to share.
 
 It runs with nothing configured: no Sage CRM means the queue falls back to
 bundled sample tickets, and no API key means the "Draft a reply" button returns
@@ -21,7 +37,7 @@ source you're looking at — `SAGE CRM · LIVE`, `SAGE CRM · STALE`, or
 `SAMPLE DATA`.
 
 ```bash
-npm test                 # 19 tests, no credentials needed
+npm test                 # 26 tests, no credentials needed
 ```
 
 ## What's on the screen
@@ -44,11 +60,22 @@ from Sage's own reference client
 
 | | |
 |---|---|
-| Base URL | `{http\|https}://{server}/sdata/{install}j/sagecrm2/-/` |
-| Auth | HTTP Basic |
-| Collection | `GET {base}case` → `{ $totalResults, $startIndex, $itemsPerPage, $resources: [...] }` |
-| Record | `GET {base}case('41')` → `{ $key, $title, $url, ...fields }` |
+| Base URL | `{server}/sdata/{install}j/{contract}/-/` |
+| Geerings | `http://WG-SQL-01/sdata/crmj/sagecrm/-/` |
+| Auth | HTTP Basic — the CRM user needs **Allow Webservices = True** |
+| Format | **Atom XML.** This install errors on `Accept: application/json` |
+| Collection | `GET {base}case` → an Atom feed of `<entry>` / `<payload>` elements |
+| Record | `GET {base}case('41')` → a single entry |
 | Metadata | `GET {base}$prototypes` — every entity exposed to web services |
+
+The contract segment differs between installs (`sagecrm` here, `sagecrm2`
+elsewhere), so it's configurable via `SAGE_CONTRACT`.
+
+`server/sdata-xml.mjs` flattens the Atom feed into the same record shape a JSON
+reply would give, so the mapping layer is unchanged by the transport. It matches
+on **local element names**, not namespace prefixes, since servers choose their
+own. If an install does serve JSON, the client still handles it — it branches on
+the response content type.
 
 Support **cases** are the queue. Linked `Company` and `Person` records supply
 the customer, and `communication` records supply previous contact.
@@ -82,6 +109,16 @@ Metrics the CRM genuinely cannot answer — average handling time, CSAT,
 automation rate — render as `—` with "not tracked in Sage CRM" rather than
 borrowing a number. Wire them to whatever system does hold them, or drop the
 tiles.
+
+### Writes need SOAP, not SData
+
+SData is read-only. Creating or updating records goes through the SOAP endpoint
+at `{server}/CRM/eware.dll/webservice` — logon, then carry the session in a
+`<SessionHeader>` for add/update/query/delete. **This app does not write to the
+CRM at all yet**; it only reads. The Call iQ worker
+(`wg-calls/onprem/sage-crm-worker/`) has working SOAP helpers and the
+hard-won gotchas (field-prefix stripping, the plural `users` entity, `comm_link`
+linking, the buggy delete) if writes are added later.
 
 ## Claude integration
 
@@ -131,13 +168,23 @@ App settings are namespaced `RESOLVEIQ_*` so they can't collide with an ambient
 
 ## Testing
 
-`npm test` runs 19 tests against fake Sage CRM and Anthropic servers that speak
+`npm test` runs 26 tests against fake Sage CRM and Anthropic servers that speak
 the real wire formats, so the client code, mapping, HTTP surface and error paths
 are all exercised without credentials or network access.
 
-**Not yet tested against a real Sage CRM instance or a real API key** — the
-contracts come from Sage's reference client and the Anthropic SDK's own types.
-Expect to adjust `mapCase()` field candidates on first connection.
+**Not yet run against the live CRM or a real API key.** The transport details
+(LAN-only, XML not JSON, the `sagecrm` contract segment, Basic auth) come from
+the working Call iQ connection. The Atom element structure is the standard SData
+shape and is covered by tests, but the first real response is what will confirm
+it — that is what `npm run check-sage` is for.
+
+Two things are genuinely unknown until then:
+
+1. **Whether the `case` entity is exposed to web services** on this install. The
+   Call iQ worker uses company/person/communication/comm_link/users. If cases
+   aren't exposed, the queue needs either that entity enabled or a different
+   source. `check-sage` answers this in section 2.
+2. **The exact case field names.** `check-sage` prints them in section 3.
 
 ## Static build
 

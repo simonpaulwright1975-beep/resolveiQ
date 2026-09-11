@@ -1,9 +1,10 @@
 /* Stand-in servers for the two external systems, so the real client code can be
    exercised end to end without a CRM box or an API key.
 
-   The Sage responses use the envelope documented by Sage's own reference client
-   ($totalResults / $resources / $key), and the Anthropic response uses the
-   Messages API shape the SDK parses. */
+   The Sage responses are Atom XML, matching what the Geerings install actually
+   returns (it rejects Accept: application/json). Namespace prefixes are
+   deliberately non-obvious here so the parser can't rely on them. The Anthropic
+   response uses the Messages API shape the SDK parses. */
 
 import { createServer } from 'node:http';
 
@@ -63,8 +64,9 @@ export const SAGE_CASES = [
   }
 ];
 
-export function fakeSage({ failWith = null } = {}) {
+export function fakeSage({ failWith = null, format = 'xml', onRequest = null } = {}) {
   return startServer((req, res) => {
+    if (onRequest) onRequest(req);
     if (failWith) {
       res.writeHead(failWith, { 'Content-Type': 'text/plain' }).end('upstream error');
       return;
@@ -84,24 +86,32 @@ export function fakeSage({ failWith = null } = {}) {
       res.end(JSON.stringify(body));
     };
 
+    const xml = (body) => {
+      res.writeHead(200, { 'Content-Type': 'application/atom+xml; charset=utf-8' });
+      res.end(body);
+    };
+
     if (url.pathname.endsWith('/$prototypes')) {
       return json({ EntityList: [{ EntityName: 'case' }, { EntityName: 'company' }] });
     }
 
     if (url.pathname.endsWith('/case')) {
-      return json({
-        $totalResults: SAGE_CASES.length,
-        $startIndex: 1,
-        $itemsPerPage: SAGE_CASES.length,
-        $resources: SAGE_CASES
-      });
+      return format === 'json'
+        ? json({
+            $totalResults: SAGE_CASES.length,
+            $startIndex: 1,
+            $itemsPerPage: SAGE_CASES.length,
+            $resources: SAGE_CASES
+          })
+        : xml(feed(SAGE_CASES, 'case'));
     }
 
     if (url.pathname.endsWith('/communication')) {
-      return json({
-        $totalResults: 1,
-        $resources: [{ comm_datetime: '2026-08-12T09:00:00Z', comm_note: 'Late delivery — goodwill credit' }]
-      });
+      return xml(feed([{
+        $key: 91,
+        comm_datetime: '2026-08-12T09:00:00Z',
+        comm_note: 'Late delivery — goodwill credit'
+      }], 'communication'));
     }
 
     res.writeHead(404, { 'Content-Type': 'text/plain' }).end('no such entity');
@@ -144,4 +154,55 @@ export function fakeAnthropic({ refuse = false } = {}) {
       })
     );
   }).then((s) => Object.assign(s, { received, suggestion }));
+}
+
+/* ---------- Atom XML construction ---------- */
+
+const escapeXml = (v) =>
+  String(v).replace(/[<>&'"]/g, (c) =>
+    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
+
+/* Render one fixture object as an SData payload element. Nested objects become
+   linked entities carrying their own key, exactly as Sage returns them. */
+function payload(record, entityName) {
+  const key = record.$key;
+  const fields = Object.entries(record)
+    .filter(([k]) => !k.startsWith('$'))
+    .map(([k, v]) => {
+      if (v && typeof v === 'object') {
+        const inner = Object.entries(v)
+          .filter(([ik]) => !ik.startsWith('$'))
+          .map(([ik, iv]) => `<${ik}>${escapeXml(iv)}</${ik}>`)
+          .join('');
+        const title = v.$title ? `<comp_name>${escapeXml(v.$title)}</comp_name>` : '';
+        return `<${k} crm:key="${escapeXml(v.$key ?? '')}">${title}${inner}</${k}>`;
+      }
+      return `<${k}>${escapeXml(v)}</${k}>`;
+    })
+    .join('');
+
+  return `<${entityName} crm:key="${escapeXml(key ?? '')}">${fields}</${entityName}>`;
+}
+
+export function feed(records, entityName) {
+  const entries = records
+    .map(
+      (r) => `  <entry>
+    <title>${escapeXml(r.$title || '')}</title>
+    <crm:payload>${payload(r, entityName)}</crm:payload>
+  </entry>`
+    )
+    .join('\n');
+
+  /* "crm:" rather than the conventional "sdata:" — the parser must match on
+     local names, not on a prefix it happens to expect. */
+  return `<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:crm="http://schemas.sage.com/sdata/2008/1"
+      xmlns:os="http://a9.com/-/spec/opensearch/1.1/">
+  <os:totalResults>${records.length}</os:totalResults>
+  <os:startIndex>1</os:startIndex>
+  <os:itemsPerPage>${records.length}</os:itemsPerPage>
+${entries}
+</feed>`;
 }

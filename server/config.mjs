@@ -35,11 +35,13 @@ export const config = {
   port: num(process.env.PORT, 3000),
 
   sage: {
-    /* Full SData base, e.g. https://crm.example.co.uk/sdata/CRMj/sagecrm2/-/
-       Built from parts if SAGE_BASE_URL isn't given directly. */
+    /* Full SData base, e.g. http://WG-SQL-01/sdata/crmj/sagecrm/-/
+       Built from parts if SAGE_BASE_URL isn't given directly. The contract
+       segment ("sagecrm" on the Geerings install, "sagecrm2" on others) is
+       configurable because it genuinely differs between deployments. */
     baseUrl: (process.env.SAGE_BASE_URL ||
       (process.env.SAGE_SERVER
-        ? `${process.env.SAGE_SERVER.replace(/\/+$/, '')}/sdata/${process.env.SAGE_INSTALL || 'CRM'}j/sagecrm2/-/`
+        ? `${process.env.SAGE_SERVER.replace(/\/+$/, '')}/sdata/${process.env.SAGE_INSTALL || 'crm'}j/${process.env.SAGE_CONTRACT || 'sagecrm'}/-/`
         : '')).replace(/\/*$/, '/'),
     user: process.env.SAGE_USER || '',
     password: process.env.SAGE_PASSWORD || '',

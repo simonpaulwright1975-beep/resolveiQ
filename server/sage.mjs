@@ -3,7 +3,13 @@
    Verified against Sage's own reference client
    (github.com/Sage/sage_crm_rest_api_client):
 
-     base URL   {http|https}://{server}/sdata/{install}j/sagecrm2/-/
+     base URL   {http|https}://{server}/sdata/{install}j/{contract}/-/
+                e.g. http://WG-SQL-01/sdata/crmj/sagecrm/-/   (Geerings install)
+                The contract segment differs between installs — "sagecrm" and
+                "sagecrm2" both exist in the wild — so it is configurable.
+     format     Atom XML. The Geerings install errors on Accept: application/json,
+                so reads ask for application/atom+xml and are parsed by
+                sdata-xml.mjs into the same record shape a JSON reply would give.
      auth       HTTP Basic, user:password
      collection GET {base}{entity}
                 -> { $totalResults, $startIndex, $itemsPerPage, $resources: [...] }
@@ -18,6 +24,7 @@
    of throwing — a missing column should not take the queue offline. */
 
 import { config } from './config.mjs';
+import { parseFeed } from './sdata-xml.mjs';
 
 const CHANNEL_HINTS = [
   [/phone|call|voice|telephone/i, 'Voice'],
@@ -173,26 +180,52 @@ export class SageClient {
     }
 
     const response = await fetch(url, {
-      headers: { Authorization: this.authHeader, Accept: 'application/json' },
+      headers: {
+        Authorization: this.authHeader,
+        /* XML first: Sage CRM installs commonly reject application/json. */
+        Accept: 'application/atom+xml,application/xml;q=0.9,application/json;q=0.5'
+      },
       signal
     });
 
+    const body = await response.text();
+
     if (!response.ok) {
-      const body = await response.text().catch(() => '');
       const error = new Error(
-        `Sage CRM ${response.status} ${response.statusText} for ${url.pathname}${body ? ` — ${body.slice(0, 300)}` : ''}`
+        `Sage CRM ${response.status} ${response.statusText} for ${url.pathname}` +
+        (body ? ` — ${body.slice(0, 300)}` : '')
       );
       error.status = response.status;
       throw error;
     }
 
-    return response.json();
+    return { body, contentType: response.headers.get('content-type') || '' };
+  }
+
+  /* Normalise whichever format came back into { total, startIndex, perPage,
+     records }. XML is the expected case; JSON is accepted so the client still
+     works against installs that serve it. */
+  parse(raw) {
+    const looksJson =
+      raw.contentType.includes('json') || raw.body.trimStart().startsWith('{');
+
+    if (looksJson) {
+      const payload = JSON.parse(raw.body);
+      return {
+        total: payload?.$totalResults ?? 0,
+        startIndex: payload?.$startIndex ?? 1,
+        perPage: payload?.$itemsPerPage ?? 0,
+        records: Array.isArray(payload?.$resources) ? payload.$resources : []
+      };
+    }
+
+    return parseFeed(raw.body);
   }
 
   /* SData paging/filtering params. `where` uses the CRM's own column names,
      so it is passed through untouched. */
   async collection(entity, { where, orderBy, count, startIndex, signal } = {}) {
-    const payload = await this.request(entity, {
+    const raw = await this.request(entity, {
       params: {
         count: count ?? this.pageSize,
         startIndex,
@@ -201,26 +234,24 @@ export class SageClient {
       },
       signal
     });
-    return {
-      total: payload?.$totalResults ?? 0,
-      startIndex: payload?.$startIndex ?? 1,
-      perPage: payload?.$itemsPerPage ?? 0,
-      records: Array.isArray(payload?.$resources) ? payload.$resources : []
-    };
+    return this.parse(raw);
   }
 
   async record(entity, id, { signal } = {}) {
-    return this.request(`${entity}('${id}')`, { signal });
+    const raw = await this.request(`${entity}('${id}')`, { signal });
+    return this.parse(raw).records[0] ?? null;
   }
 
   /* Entities exposed to web services on this install — useful for checking a
      connection and for discovering custom entity names. */
   async entities({ signal } = {}) {
-    return this.request('$prototypes', { signal });
+    const raw = await this.request('$prototypes', { signal });
+    return raw.body;
   }
 
   async entityFields(entity, { signal } = {}) {
-    return this.request(`$prototypes/${entity}`, { signal });
+    const raw = await this.request(`$prototypes/${entity}`, { signal });
+    return raw.body;
   }
 
   /* The queue: open cases, most recently opened first. */
