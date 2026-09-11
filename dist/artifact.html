@@ -528,6 +528,183 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
   color: var(--warn);
 }
 
+/* ---------- how-it-works tour ---------- */
+/* Uses the console's own tokens so it belongs to the page rather than sitting
+   on top of it, and follows the viewer's light/dark setting like everything else. */
+
+.tour-veil {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 15, 10, .45);
+  z-index: 100;
+  transition: background .15s ease;
+}
+
+/* When a step highlights an element, the spotlight's own shadow does the
+   dimming — the veil must step back or the page goes twice as dark. */
+.tour-veil.is-clear { background: transparent; }
+
+/* A transparent window with a very large shadow: whatever sits beneath the
+   centre stays visible and lit, everything around it dims. */
+.tour-spot {
+  position: fixed;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(30, 15, 10, .45), 0 0 0 2px var(--accent);
+  background: transparent;
+  pointer-events: none;
+  z-index: 101;
+  transition: top .2s ease, left .2s ease, width .2s ease, height .2s ease, opacity .15s ease;
+}
+
+.tour-card {
+  position: fixed;
+  z-index: 102;
+  width: min(360px, calc(100vw - 24px));
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgba(60, 30, 20, .22);
+  padding: 15px 17px 14px;
+  transition: top .2s ease, left .2s ease;
+}
+
+.tour-card:focus { outline: none; }
+
+.tour-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.tour-step {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tour-skip {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 2px 4px;
+}
+
+.tour-skip:hover { background: transparent; color: var(--ink); text-decoration: underline; }
+
+.tour-flag {
+  display: inline-block;
+  margin-bottom: 7px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.tour-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -.01em;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.tour-do {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.tour-do strong {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  margin-right: 5px;
+}
+
+.tour-why {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.tour-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tour-nav .primary { margin-left: auto; }
+.tour-nav button { padding: 6px 13px; font-size: 13px; }
+
+.tour-dots { display: flex; gap: 4px; align-items: center; margin-right: 4px; }
+
+.tour-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--track);
+}
+
+.tour-dot.is-on { background: var(--accent); }
+
+/* first-run nudge */
+
+.tour-nudge {
+  position: fixed;
+  z-index: 99;
+  width: min(320px, calc(100vw - 24px));
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 12px 34px 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.tour-nudge strong { color: var(--ink); }
+
+.tour-nudge__go {
+  display: block;
+  margin-top: 9px;
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12.5px;
+  padding: 5px 11px;
+}
+
+.tour-nudge__x {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  padding: 2px 5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-card, .tour-spot { transition: none; }
+}
+
 </style>
 
 <div class="wrap">
@@ -542,6 +719,7 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
       </div>
       <div class="masthead__meta">
         <span class="live" id="source-badge"><span class="live__dot"></span> <span id="source-text">CONNECTING</span></span>
+        <button id="how-it-works" title="A short walkthrough of how to work the queue">How it works</button>
         <button id="reset" title="Restore the sample queue to its starting state">Reset demo</button>
       </div>
     </header>
@@ -1368,7 +1546,7 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
         : '') +
       (state.saveNote ? '<p class="save-note">' + esc(state.saveNote) + '</p>' : '') +
 
-      '<div class="actions">' +
+      '<div class="actions actions--case">' +
         (state.saving
           ? '<button class="primary" disabled>Saving to the customer record…</button>'
           : isOpen(t)
@@ -1510,6 +1688,16 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && state.selected) closeDrawer();
     });
+
+    /* The tour drives the app through these rather than faking clicks. */
+    window.RESOLVEIQ_APP = {
+      openFirstTicket: function () {
+        if (state.selected) return;
+        var first = visibleTickets()[0];
+        if (first) openDrawer(first.id);
+      },
+      closeDrawer: function () { if (state.selected) closeDrawer(); }
+    };
 
     $('reset').addEventListener('click', function () {
       try { localStorage.removeItem(STORE_KEY); } catch (err) { /* ignore */ }

@@ -4,17 +4,16 @@ Purpose: script for the in-app tour + team walkthrough.
 Audience: customer service advisors (Tier 1). Manager steps called out separately.
 Method: `how-to-tour-recipe.md` in this folder.
 
-> **Build status — read before using this with the team.**
+> **Build status.** The tour is built (`assets/tour.js`) and the keystone step
+> is real: resolving writes the case to the central customer record, and
+> refuses to mark it done if that write fails.
 >
-> Steps marked **[not wired]** describe behaviour that does not exist yet.
-> Today the console reads cases and drafts replies; it does not send anything,
-> and nothing an advisor does is saved beyond their own browser. The only
-> network call the page makes is the one that asks for a draft.
->
-> This brief is deliberately written for the finished journey, so it doubles as
-> the spec for what still has to be built. **Do not run the tour for advisors
-> until the [not wired] items are done** — a tour that teaches "send reply and
-> resolve" when nothing sends will destroy trust in the app on day one.
+> **One card in this brief is deliberately NOT in the shipped tour:** "Read
+> their history before you reply". `history` is hardcoded to `[]`, so Previous
+> contact always reads "first time this customer has contacted us" — false for
+> any customer with a record. Pointing advisors at it would teach them to trust
+> a panel that lies. The card returns when the panel is populated; the shipped
+> tour is 10 cards (a hero plus nine steps) rather than eleven.
 
 ---
 
@@ -60,11 +59,15 @@ has already been helped.
 - **Why:** Everything about that customer is in one place — you shouldn't need
   another system to answer them.
 
-**4. Read their history before you reply**
+**4. Read their history before you reply** **[not wired — omitted from the tour]**
 
 - **Do:** Scroll to **Previous contact** in the panel.
 - **Why:** If they've called about this before, saying so changes the whole
   conversation. Customers should never have to repeat themselves.
+- **Why it isn't in the tour:** `mapCase` sets `history: []` and nothing
+  populates it, so the panel always claims this is the customer's first
+  contact. The data exists — `core.customer_timeline` holds 27,824 events
+  across 1,693 accounts — it just isn't read back yet.
 
 **5. Ask for a draft**
 
@@ -80,14 +83,14 @@ has already been helped.
   number, a refund amount or a policy. You are accountable for what goes out,
   not the app. A low confidence score is it telling you it isn't sure.
 
-**7. Escalate when it says to** **[not wired]**
+**7. Escalate when it says to** **[no destination yet]**
 
 - **Do:** If the draft is flagged **Escalate**, pass it to a manager rather than
   answering it yourself.
 - **Why:** It flags things needing authority you may not have — refunds beyond
   routine goodwill, anything legal or data-protection, anything about safety.
 
-**8. ★ Finish the case here** **[not wired]**
+**8. ★ Finish the case here**
 
 - **Do:** Send your reply with **Send reply & resolve**, or **Move to pending**
   if you're waiting on the customer. Never just close the tab.
@@ -96,7 +99,7 @@ has already been helped.
   Skip it and the customer's story is lost and the queue still shows them
   waiting.
 
-**9. Where your work shows up** **[partly wired]**
+**9. Where your work shows up** **[partly wired — figures are per-browser]**
 
 - **Do:** Watch the tiles along the top and the SLA dial after you resolve
   something.
@@ -124,7 +127,8 @@ has already been helped.
   score; a low one means it wasn't sure. Correct it and carry on, and tell your
   manager if a particular kind of case is consistently wrong.
 - **Where does my resolved case go?** Onto that customer's record, so the next
-  person who speaks to them sees what happened. **[not wired]**
+  person who speaks to them sees what happened. If it can't be saved you are
+  told, and the case stays open.
 - **Why is a case marked "breached"?** The customer has been waiting longer than
   the time allowed for that priority. High priority allows 20 minutes, Medium
   60, Low 240. It is not a criticism of you — it's a flag that it needs doing now.
@@ -170,13 +174,22 @@ has already been helped.
 - **Keep this brief as the source.** Trim the cards from it; when the journey
   changes, change this file first.
 
-### What has to be built before advisors see this
+### Still to build
 
 | Step | Needs |
 |---|---|
+| 4 | Previous contact read back from `core.customer_timeline` — then the card returns to the tour |
 | 7 | Somewhere for escalations to go, and someone to own them |
-| 8 | Case writes into `core.cases` — the ingest endpoint, then the Sage mirror |
 | 9 | Resolved-today and SLA figures drawn from stored cases, not browser state |
-| Quick answers | "Where does my resolved case go" is only true once step 8 is real |
+| — | Confirm which Sage CRM field holds the Sage 200 account reference, or cases save unlinked and never reach the timeline |
 
-Until then this brief is a build spec. The tour ships when the journey does.
+### How the shipped tour behaves
+
+- Ten cards: a hero naming the keystone, then nine steps.
+- Never auto-launches. It sits behind **How it works** in the masthead.
+- A first-time visitor gets one dismissible nudge, which leads with the
+  keystone rather than with "take a tour".
+- "Step N of 10", dots, Back/Next, Skip; Escape and arrow keys work.
+- Each card highlights the real element and opens the case panel when a step
+  needs it. The card is placed so it never covers what it is pointing at.
+- Uses the console's own tokens, so it follows light/dark like the rest.

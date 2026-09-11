@@ -420,7 +420,7 @@
         : '') +
       (state.saveNote ? '<p class="save-note">' + esc(state.saveNote) + '</p>' : '') +
 
-      '<div class="actions">' +
+      '<div class="actions actions--case">' +
         (state.saving
           ? '<button class="primary" disabled>Saving to the customer record…</button>'
           : isOpen(t)
@@ -562,6 +562,16 @@
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && state.selected) closeDrawer();
     });
+
+    /* The tour drives the app through these rather than faking clicks. */
+    window.RESOLVEIQ_APP = {
+      openFirstTicket: function () {
+        if (state.selected) return;
+        var first = visibleTickets()[0];
+        if (first) openDrawer(first.id);
+      },
+      closeDrawer: function () { if (state.selected) closeDrawer(); }
+    };
 
     $('reset').addEventListener('click', function () {
       try { localStorage.removeItem(STORE_KEY); } catch (err) { /* ignore */ }
