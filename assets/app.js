@@ -6,15 +6,17 @@
 (function () {
   'use strict';
 
-  var DATA = window.RESOLVEIQ_DATA;
+  var DATA = null;              // resolved by init() from /api/tickets
   var STORE_KEY = 'resolveiq.overrides.v1';
-  var ME = DATA.currentAgent;
+  var ME = 'You';
 
   var state = {
     status: 'active',       // active | new | open | pending | resolved | all
     query: '',
     selected: null,
-    tickets: []
+    tickets: [],
+    drafting: false,        // a /api/suggest call is in flight
+    draftError: null
   };
 
   /* ---------- persistence (best effort — private mode, blocked storage) ---------- */
@@ -85,9 +87,28 @@
   /* ---------- KPI row ---------- */
 
   function renderKpis() {
-    var m = DATA.metrics;
+    var m = DATA.metrics || {};
     var open = state.tickets.filter(isOpen);
     var breaching = open.filter(function (t) { return slaState(t) !== 'ok'; }).length;
+
+    var has = function (v) { return v !== null && v !== undefined && !isNaN(v); };
+
+    /* A delta needs both halves. Missing either means we say nothing rather
+       than inventing a comparison. */
+    var delta = function (now, before, unit, higherIsBetter) {
+      if (!has(now) || !has(before)) return { text: 'not tracked in Sage CRM', tone: 'muted' };
+      var d = now - before;
+      var better = higherIsBetter ? d >= 0 : d <= 0;
+      return {
+        text: (d >= 0 ? '↑ +' : '↓ ') + Math.abs(d).toFixed(unit === 'pts' ? 0 : 1) +
+              (unit ? ' ' + unit : ''),
+        tone: better ? 'good' : 'bad'
+      };
+    };
+
+    var show = function (v, suffix, decimals) {
+      return has(v) ? Number(v).toFixed(decimals || 0) + (suffix || '') : '—';
+    };
 
     var cards = [
       {
@@ -98,27 +119,28 @@
       },
       {
         label: 'Resolved today',
-        value: m.resolvedToday,
-        delta: '↑ +' + (m.resolvedToday - m.resolvedYesterday) + ' vs yesterday',
-        tone: 'good'
+        value: show(m.resolvedToday),
+        delta: (function (d) { return d.tone === 'muted' ? 'from open cases' : d.text + ' vs yesterday'; })(
+          delta(m.resolvedToday, m.resolvedYesterday, '', true)),
+        tone: delta(m.resolvedToday, m.resolvedYesterday, '', true).tone
       },
       {
         label: 'Auto-resolved',
-        value: m.autoResolvedPct + '%',
-        delta: '↑ +' + (m.autoResolvedPct - m.autoResolvedPrevPct) + ' pts this month',
-        tone: 'good'
+        value: show(m.autoResolvedPct, '%'),
+        delta: delta(m.autoResolvedPct, m.autoResolvedPrevPct, 'pts', true).text,
+        tone: delta(m.autoResolvedPct, m.autoResolvedPrevPct, 'pts', true).tone
       },
       {
         label: 'Avg handling time',
-        value: m.avgHandleMins + 'm',
-        delta: '↓ ' + (m.prevHandleMins - m.avgHandleMins).toFixed(1) + 'm faster',
-        tone: 'good'
+        value: show(m.avgHandleMins, 'm', 1),
+        delta: delta(m.avgHandleMins, m.prevHandleMins, 'm', false).text,
+        tone: delta(m.avgHandleMins, m.prevHandleMins, 'm', false).tone
       },
       {
         label: 'CSAT',
-        value: m.csat.toFixed(1),
-        delta: '↑ from ' + m.prevCsat.toFixed(1) + ' last quarter',
-        tone: 'good'
+        value: show(m.csat, '', 1),
+        delta: delta(m.csat, m.prevCsat, '', true).text,
+        tone: delta(m.csat, m.prevCsat, '', true).tone
       }
     ];
 
@@ -172,11 +194,12 @@
     var circumference = 2 * Math.PI * r;
     var arc = $('gauge-arc');
     arc.setAttribute('stroke-dasharray', (circumference * pct / 100).toFixed(1) + ' ' + circumference.toFixed(1));
-    arc.setAttribute('stroke', pct >= DATA.metrics.slaTargetPct ? 'var(--good)' : 'var(--accent)');
+    var target = (DATA.metrics && DATA.metrics.slaTargetPct) || 95;
+    arc.setAttribute('stroke', pct >= target ? 'var(--good)' : 'var(--accent)');
 
     $('gauge-pct').textContent = pct + '%';
     $('gauge-foot').innerHTML = '<strong>' + within + '</strong> of ' + open.length +
-      ' open tickets inside target · goal ' + DATA.metrics.slaTargetPct + '%';
+      ' open tickets inside target · goal ' + target + '%';
   }
 
   /* ---------- queue table ---------- */
@@ -238,6 +261,77 @@
     }).join('');
   }
 
+  /* ---------- suggested resolution ---------- */
+
+  function suggestionHtml(t) {
+    if (state.drafting) {
+      return '<div class="suggestion"><p>Reading the case and drafting a reply…</p></div>';
+    }
+
+    var error = state.draftError
+      ? '<p class="draft-error">' + esc(state.draftError) + '</p>'
+      : '';
+
+    if (!t.aiSuggestion) {
+      return '<div class="suggestion">' +
+        '<p>No draft yet.</p>' + error +
+        '<div class="actions"><button data-act="draft">Draft a reply</button></div>' +
+        '</div>';
+    }
+
+    var confidence = t.aiConfidence == null ? null : Math.round(t.aiConfidence * 100);
+    var steps = (t.nextSteps || []).map(function (n) {
+      return '<li>' + esc(n) + '</li>';
+    }).join('');
+
+    return '<div class="suggestion">' +
+      (confidence == null ? '' : '<span class="pill pill--accent">' + confidence + '% confidence</span>') +
+      (t.escalate ? ' <span class="pill pill--bad">Escalate</span>' : '') +
+      (t.aiSummary ? '<p><strong>' + esc(t.aiSummary) + '</strong></p>' : '') +
+      '<p>' + esc(t.aiSuggestion).replace(/\n/g, '<br>') + '</p>' +
+      (steps ? '<span class="label">Next steps</span><ul class="steps">' + steps + '</ul>' : '') +
+      (t.escalate && t.escalationReason
+        ? '<p class="draft-error">' + esc(t.escalationReason) + '</p>' : '') +
+      error +
+      '<div class="actions"><button data-act="draft">Redraft</button></div>' +
+      '</div>';
+  }
+
+  async function draft() {
+    var t = state.tickets.filter(function (x) { return x.id === state.selected; })[0];
+    if (!t || state.drafting) return;
+
+    state.drafting = true;
+    state.draftError = null;
+    openDrawer(t.id);
+
+    try {
+      var response = await fetch('/api/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket: t })
+      });
+      var body = await response.json();
+      if (!response.ok) throw new Error(body.error || ('HTTP ' + response.status));
+
+      t.aiSuggestion = body.reply;
+      t.aiSummary = body.summary;
+      t.aiConfidence = body.confidence;
+      t.nextSteps = body.nextSteps;
+      t.escalate = body.escalate;
+      t.escalationReason = body.escalationReason;
+      /* The model's read of intent and tone beats the keyword guess. */
+      if (body.intent) t.intent = body.intent;
+      if (body.sentiment) t.sentiment = body.sentiment;
+    } catch (error) {
+      state.draftError = error.message;
+    } finally {
+      state.drafting = false;
+      renderAll();
+      openDrawer(t.id);
+    }
+  }
+
   /* ---------- drawer ---------- */
 
   var lastFocused = null;
@@ -256,8 +350,6 @@
       '<span class="pill pill--neutral">' + esc(t.intent) + '</span>' +
       '<span class="pill pill--' + (slaState(t) === 'breach' ? 'bad' : slaState(t) === 'soon' ? 'warn' : 'good') +
         '">' + esc(slaLabel(t)) + '</span>';
-
-    var confidence = Math.round(t.aiConfidence * 100);
 
     $('drawer-body').innerHTML =
       '<div class="section">' +
@@ -280,10 +372,7 @@
 
       '<div class="section">' +
         '<span class="label">Suggested resolution</span>' +
-        '<div class="suggestion">' +
-          '<span class="pill pill--accent">' + confidence + '% confidence</span>' +
-          '<p>' + esc(t.aiSuggestion) + '</p>' +
-        '</div>' +
+        suggestionHtml(t) +
       '</div>' +
 
       '<div class="section">' +
@@ -350,6 +439,20 @@
 
   /* ---------- wiring ---------- */
 
+  function renderSource() {
+    var source = DATA.source || 'sample';
+    var text = source === 'sage' ? 'SAGE CRM · LIVE'
+      : source === 'sage-stale' ? 'SAGE CRM · STALE'
+      : 'SAMPLE DATA';
+    $('source-text').textContent = text;
+    $('source-badge').querySelector('.live__dot').style.background =
+      source === 'sage' ? 'var(--good)' : source === 'sage-stale' ? 'var(--warn)' : 'var(--muted)';
+
+    $('footnote').textContent = DATA.reason
+      ? DATA.reason
+      : 'Live from Sage CRM. Drafts are generated on request and are not sent until you send them.';
+  }
+
   function renderAll() {
     renderKpis();
     renderBars();
@@ -358,8 +461,11 @@
     renderRows();
   }
 
-  function init() {
-    $('team-line').textContent = DATA.team;
+  async function init() {
+    DATA = await window.RESOLVEIQ_LOAD();
+    ME = DATA.currentAgent || 'You';
+    $('team-line').textContent = DATA.team || 'Customer Care';
+    renderSource();
     hydrate();
     renderAll();
 
@@ -389,7 +495,9 @@
 
     $('drawer-body').addEventListener('click', function (e) {
       var btn = e.target.closest('[data-act]');
-      if (btn) act(btn.dataset.act);
+      if (!btn) return;
+      if (btn.dataset.act === 'draft') draft();
+      else act(btn.dataset.act);
     });
 
     $('drawer-close').addEventListener('click', closeDrawer);

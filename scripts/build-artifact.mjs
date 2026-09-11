@@ -10,7 +10,8 @@ const read = (p) => readFileSync(join(root, p), 'utf8');
 
 const html = read('index.html');
 const css = read('assets/styles.css');
-const data = read('assets/data.js');
+const sample = read('assets/sample-data.js');
+const loader = read('assets/data.js');
 const app = read('assets/app.js');
 
 /* Take everything between <body> and </body> — the artifact host supplies the
@@ -27,7 +28,10 @@ ${css}
 ${body}
 
 <script>
-${data}
+${sample}
+</script>
+<script>
+${loader}
 </script>
 <script>
 ${app}

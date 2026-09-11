@@ -1,0 +1,16 @@
+{
+  "name": "resolveiq",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Customer care console with Sage CRM as the data source and Claude-drafted resolutions.",
+  "scripts": {
+    "start": "node server/index.mjs",
+    "build:artifact": "node scripts/build-artifact.mjs",
+    "test": "node test/run-tests.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "zod": "^4.1.0"
+  }
+}

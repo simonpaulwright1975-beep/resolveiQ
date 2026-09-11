@@ -508,3 +508,14 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
   color: var(--muted);
   font-size: 12px;
 }
+
+/* draft output */
+
+.steps { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.steps li { font-size: 12.5px; color: var(--ink-2); }
+
+.draft-error {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--bad);
+}
