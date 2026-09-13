@@ -9,6 +9,28 @@ ResolveIQ's cases live in **WG Main**, alongside ClientiQ, in `public`.
 | `public.resolveiq_cases` | Customer care cases, keyed on `company_id` |
 | `public.resolveiq_case_events` | What was done on a case, internal and customer-facing |
 | `public.resolveiq_upsert_case(jsonb)` | The one write path: upserts a case and, once resolved, queues the Sage CRM communication exactly once |
+| `public.vw_crm_company_activity` | **ClientiQ's view**, extended here with a third `union all` branch so cases appear in the company activity feed |
+
+## The activity feed branch — read this
+
+`vw_crm_company_activity` belongs to ClientiQ. It was changed **out of band**
+from this repo. The SQL is in `db/migrations/0001_activity_feed_resolveiq_branch.sql`
+and should be folded into ClientiQ's own migration, or their next deploy will
+silently drop ResolveIQ off the feed.
+
+The existing branches are reproduced exactly. Verified before and after:
+`sage_crm` 34,338 rows and `calliq` 2,004 rows, unchanged.
+
+Two decisions in that branch:
+
+- **`comm_id` is negated** (`-case_no`). The feed keys rows on a bigint and
+  cases have a uuid; Sage comm_ids are positive, so a negative number cannot
+  collide and a row's origin is obvious.
+- **Dedup is on whether the Sage communication exists**, not on whether it has
+  been queued. Resolving queues a note that lands about five minutes later —
+  keying on "queued" would blank the case from the customer's record during
+  that window; keying on nothing would leave every resolved case on the
+  timeline twice, for ever.
 
 ## What was removed, and why
 
