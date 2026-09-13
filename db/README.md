@@ -8,7 +8,7 @@ ResolveIQ's cases live in **WG Main**, alongside ClientiQ, in `public`.
 |---|---|
 | `public.resolveiq_cases` | Customer care cases, keyed on `company_id` |
 | `public.resolveiq_case_events` | What was done on a case, internal and customer-facing |
-| `public.resolveiq_upsert_case(jsonb)` | The one write path: upserts a case and, once resolved, queues the Sage CRM communication exactly once |
+| `public.resolveiq_upsert_case(jsonb)` | The one write path: upserts a case and, once resolved, queues the Sage CRM communication exactly once. Accepts `source` and `source_ref` so a case raised by another app traces back to what produced it. |
 | `public.vw_crm_company_activity` | **ClientiQ's view**, extended here with a third `union all` branch so cases appear in the company activity feed |
 | `public.vw_crm_company_list` | **ClientiQ's view**, extended here with an `open_cases` count |
 
