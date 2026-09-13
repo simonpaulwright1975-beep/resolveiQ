@@ -1,75 +1,56 @@
 # Database
 
-The shared WG customer record lives in the **WG Main** Supabase project, not in
-a database belonging to ResolveIQ. ResolveIQ reads and writes it like any other
-app in the estate.
+ResolveIQ's cases live in **WG Main**, alongside ClientiQ, in `public`.
 
-## Status
+## Applied
 
-**Applied to WG Main.**
-
-| File | What it does |
+| Object | What it is |
 |---|---|
-| `0001_core_customer_record.sql` | Creates the `core` schema: companies, contacts, cases, case events, and the customer timeline view. Additive only — it alters no existing table. |
-| `0002_backfill_companies_from_sage.sql` | Populates `core.companies` from the 2,669 customers already synced in `public.sage_customers`. Re-runnable; never overwrites rows edited by hand. |
-| `0003_null_unknown_company_status.sql` | Corrects 0002: company status was being asserted from a Sage column that turned out to hold one value for every row. |
+| `public.resolveiq_cases` | Customer care cases, keyed on `company_id` |
+| `public.resolveiq_case_events` | What was done on a case, internal and customer-facing |
+| `public.resolveiq_upsert_case(jsonb)` | The one write path: upserts a case and, once resolved, queues the Sage CRM communication exactly once |
 
-Live counts after applying:
+## What was removed, and why
 
-| | |
-|---|---|
-| `core.companies` | 2,669 (2,150 with a phone, 2,557 with an email) |
-| `core.contacts` | 0 — the Sage person sync has not run |
-| `core.cases` | 0 — nothing writes them yet |
-| `core.customer_timeline` | 27,824 rows across 1,693 accounts |
+The `core` schema (companies, contacts, cases, case_events, customer_timeline)
+was **dropped**. It was keyed on `account_ref`, and only **2,927 of 28,005
+companies — 10.5% — have one**. It could never represent the customer base, and
+it duplicated `sage_crm.companies`, which is the second customer table this work
+was supposed to stop creating.
 
-Timeline by source: `sage_crm` 26,388 · `calliq` 1,426 · `reorderradar` 10 ·
-`resolveiq` 0. 1,671 of those accounts match a company row.
+Nothing was lost: its companies were a backfill of data still present elsewhere,
+and its case tables were empty.
 
-## Gaps found in the source data
+## The key
 
-Two things the customer card needs that Sage is not currently supplying. Both
-are sync problems on WG-SQL-01, not schema problems:
+`company_id` — the Sage CRM company id. Present on every company.
 
-- **Addresses are empty.** `sage_customers` has `address_line1`, `town` and
-  `postcode` columns and all 2,669 rows are blank. No company has an address.
-- **Customer status is unknowable.** `account_status` is `0` for every row, and
-  `sage_orders` holds open orders only, so lapsed cannot be inferred from order
-  recency either. Status is left NULL rather than guessed.
+`account_ref` (the Sage 200 code) is carried where it exists but never relied
+on. Treat a null `account_ref` as normal, not as missing data.
 
-## Why `core` and not `resolveiq_*`
+## Reading
 
-`public` already contains `meetiq_customers`, `appt_customers`,
-`rebates_customers`, `reorder_customers`, `brochures_customers`,
-`donna_customer_extras`, plus four separate contact tables. Every app brought
-its own copy of the customer. Adding `resolveiq_customers` would repeat that.
+Read ClientiQ's `public.vw_crm_*` views, never `sage_crm.*` directly — those are
+a mirror whose shape follows Sage CRM's, which is not stable.
 
-`core` is the one place a customer exists. Apps join it; they don't copy it.
+`vw_crm_companies` **times out on an unfiltered count**. Always filter by
+`company_id`. Company search goes through `vw_crm_company_list`.
 
-## What already exists
+## Writing, and the Sage CRM mirror
 
-Most of the spine is there. This does not rebuild it:
+`resolveiq_upsert_case` stores the case, then calls `crm_queue_change` to queue a
+Sage CRM communication when the case is resolved. `sage_queue_id` records that it
+has been queued, so it happens once per case however often the case is updated.
 
-- `public.sage_customers` — 2,669 customers, synced from Sage
-- `public.crm_communications` — 26,388 communications across 1,615 accounts
-- `public.dialpad_calls` — 5,771 calls with `customer_account_match` and AI recaps
-- `public.call_transcripts` — 772 transcripts
-- `public.crm_comm_pushes` — the Call iQ → Sage push queue
-- `public.vw_customer_conversations` — the existing timeline view
+The queue is applied on-prem within about five minutes —
+`pending` → `sending` → `sent`, or `dead` with a reason after five attempts. So
+the app says "queued", never "saved to Sage CRM", until it actually is.
 
-`account_ref` (the Sage account reference) is already the join key across all of
-them, so `core` keeps it.
+A failed queue does **not** fail the case: the case is saved and the caller is
+told the Sage copy did not go, because losing the case would be worse.
 
-## Sage independence
+## Credentials
 
-`sage_customers` is a mirror: its identity is Sage's `customer_id` and the sync
-overwrites it. A record whose identity belongs to Sage cannot outlive Sage.
-
-`core.companies` owns its own `id` and treats `account_ref` as one identifier
-among several. When Sage is switched off, `account_ref` becomes ordinary legacy
-reference data and nothing else has to change.
-
-## Adding a source to the timeline
-
-Add a `UNION ALL` branch to `core.customer_timeline`. Never copy rows into a
-table — a copied timeline drifts from its sources.
+Publishable key plus a signed-in WG account. **No service-role key**, ever — it
+bypasses every permission check. The app warns if it finds one in its
+environment.

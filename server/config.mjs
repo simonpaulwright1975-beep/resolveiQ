@@ -34,31 +34,18 @@ const num = (v, fallback) => {
 export const config = {
   port: num(process.env.PORT, 3000),
 
-  sage: {
-    /* Full SData base, e.g. http://WG-SQL-01/sdata/crmj/sagecrm/-/
-       Built from parts if SAGE_BASE_URL isn't given directly. The contract
-       segment ("sagecrm" on the Geerings install, "sagecrm2" on others) is
-       configurable because it genuinely differs between deployments. */
-    baseUrl: (process.env.SAGE_BASE_URL ||
-      (process.env.SAGE_SERVER
-        ? `${process.env.SAGE_SERVER.replace(/\/+$/, '')}/sdata/${process.env.SAGE_INSTALL || 'crm'}j/${process.env.SAGE_CONTRACT || 'sagecrm'}/-/`
-        : '')).replace(/\/*$/, '/'),
-    user: process.env.SAGE_USER || '',
-    password: process.env.SAGE_PASSWORD || '',
-    /* How many cases to pull per refresh. */
-    pageSize: num(process.env.SAGE_PAGE_SIZE, 50),
-    /* Seconds to hold a queue response before re-querying the CRM. */
-    cacheSeconds: num(process.env.SAGE_CACHE_SECONDS, 30),
-    /* Reject self-signed certs unless explicitly told otherwise — many
-       on-premise CRM boxes run an internal CA. */
-    allowInsecureTls: process.env.SAGE_ALLOW_INSECURE_TLS === 'true'
-  },
+  /* Seconds a queue response is reused before re-querying ClientiQ. */
+  cacheSeconds: num(process.env.RESOLVEIQ_CACHE_SECONDS, 30),
 
-  /* The central customer record. The service key bypasses row level security,
-     so it lives here and never goes near a browser. */
-  store: {
-    url: process.env.SUPABASE_URL || '',
-    serviceKey: process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+
+  /* ClientiQ — the customer database. Publishable key plus a signed-in WG
+     account; the service-role key is deliberately not read here, because it
+     bypasses every permission check. */
+  clientiq: {
+    url: process.env.SUPABASE_URL || 'https://hlfhyzqkzqgyuohhmzzu.supabase.co',
+    key: process.env.SUPABASE_PUBLISHABLE_KEY || '',
+    email: process.env.RESOLVEIQ_SUPABASE_EMAIL || '',
+    password: process.env.RESOLVEIQ_SUPABASE_PASSWORD || ''
   },
 
   claude: {
@@ -84,6 +71,16 @@ export const config = {
   })()
 };
 
-export const sageConfigured = Boolean(config.sage.baseUrl && config.sage.user);
-export const storeConfigured = Boolean(config.store.url && config.store.serviceKey);
+export const clientiqConfigured = Boolean(
+  config.clientiq.url && config.clientiq.key && config.clientiq.email && config.clientiq.password
+);
+
+/* Loud, because a service key in the environment means someone is about to use
+   a credential this app is not supposed to hold. */
+if (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn(
+    'WARNING: a Supabase service-role key is set in the environment. ResolveIQ does not use it ' +
+    'and must not — it bypasses every permission check. Remove it from this app\'s .env.'
+  );
+}
 export const claudeConfigured = Boolean(config.claude.apiKey);

@@ -14,13 +14,11 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { config, sageConfigured, claudeConfigured, storeConfigured } from './config.mjs';
-import { SageClient } from './sage.mjs';
+import { config, claudeConfigured, clientiqConfigured } from './config.mjs';
 import { suggestForTicket, SuggestionError } from './suggest.mjs';
-import { upsertCase, ticketToCase, StoreError } from './store.mjs';
+import * as clientiq from './clientiq.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const sage = sageConfigured ? new SageClient() : null;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -44,48 +42,62 @@ async function sampleTickets() {
   return sampleCache;
 }
 
-/* Hold the CRM result briefly so a room full of agents doesn't hammer it. */
+/* Hold the result briefly so a room full of agents doesn't hammer the API. */
 let queueCache = { at: 0, payload: null };
 
 async function loadQueue() {
   const sample = await sampleTickets();
 
-  if (!sage) {
-    return { ...sample, source: 'sample', reason: 'Sage CRM is not configured' };
+  if (!clientiqConfigured) {
+    return { ...sample, source: 'sample', reason: 'ClientiQ is not configured' };
   }
 
-  const fresh = Date.now() - queueCache.at < config.sage.cacheSeconds * 1000;
+  const fresh = Date.now() - queueCache.at < config.cacheSeconds * 1000;
   if (fresh && queueCache.payload) return queueCache.payload;
 
   try {
-    const tickets = await sage.tickets();
+    const rows = await clientiq.openCases();
+
+    /* One company lookup per distinct company, not per case. */
+    const companyIds = [...new Set(rows.map((r) => r.company_id))];
+    const companies = new Map();
+    await Promise.all(
+      companyIds.map(async (id) => {
+        try {
+          companies.set(id, await clientiq.company(id));
+        } catch {
+          companies.set(id, null);   // a missing company must not drop the case
+        }
+      })
+    );
+
+    const tickets = rows.map((r) =>
+      clientiq.caseToTicket(r, { company: companies.get(r.company_id) })
+    );
+
     const payload = {
       team: sample.team,
-      currentAgent: sample.currentAgent,
+      currentAgent: config.clientiq.email || sample.currentAgent,
       metrics: deriveMetrics(tickets, sample.metrics),
       tickets,
-      source: 'sage'
+      source: 'clientiq'
     };
     queueCache = { at: Date.now(), payload };
     return payload;
   } catch (error) {
-    console.error('Sage CRM query failed:', error.message);
-    /* Serving a stale queue beats serving none. */
+    console.error('ClientiQ query failed:', error.message);
     if (queueCache.payload) {
-      return { ...queueCache.payload, source: 'sage-stale', reason: error.message };
+      return { ...queueCache.payload, source: 'clientiq-stale', reason: error.message };
     }
-    return { ...sample, source: 'sample', reason: `Sage CRM unreachable — ${error.message}` };
+    return { ...sample, source: 'sample', reason: `ClientiQ unreachable — ${error.message}` };
   }
 }
 
-/* Only report what the CRM can actually answer. Handling time, CSAT and
-   automation rate are not Sage CRM columns, so they come back null and the UI
-   shows them as unavailable rather than borrowing a sample figure — a real
-   number beside a fake comparator is worse than no number. */
+/* Only report what can actually be answered. */
 function deriveMetrics(tickets, base) {
   const open = tickets.filter((t) => t.status !== 'resolved');
   return {
-    resolvedToday: tickets.filter((t) => t.status === 'resolved').length,
+    resolvedToday: null,
     resolvedYesterday: null,
     autoResolvedPct: null,
     autoResolvedPrevPct: null,
@@ -150,20 +162,19 @@ export function createApp() {
 
     try {
       if (url.pathname === '/api/health') {
-        let sageReachable = null;
-        if (sage) {
+        let reachable = null;
+        if (clientiqConfigured) {
           try {
-            await sage.entities();
-            sageReachable = true;
+            await clientiq.openCases();
+            reachable = true;
           } catch {
-            sageReachable = false;
+            reachable = false;
           }
         }
         return sendJson(res, 200, {
           ok: true,
-          sage: { configured: sageConfigured, reachable: sageReachable, baseUrl: redact(config.sage.baseUrl) },
-          claude: { configured: claudeConfigured, model: claudeConfigured ? config.claude.model : null },
-          store: { configured: storeConfigured, url: storeConfigured ? config.store.url : null }
+          clientiq: { configured: clientiqConfigured, reachable, url: config.clientiq.url },
+          claude: { configured: claudeConfigured, model: claudeConfigured ? config.claude.model : null }
         });
       }
 
@@ -191,53 +202,90 @@ export function createApp() {
         return sendJson(res, 200, suggestion);
       }
 
-      /* Write a case to the central customer record.
-         Accepts either a console ticket ({ ticket, resolution, event }) or a
-         case straight from another producer ({ case, event }), so Call iQ and
-         anything else can post here without knowing the console's shapes. */
+      /* Write a case, and mirror it into Sage CRM once it is resolved.
+         Accepts a console ticket, or a raw case from another producer. */
       if (url.pathname === '/api/cases') {
         if (req.method !== 'POST') return sendJson(res, 405, { error: 'Use POST' });
 
         const body = await readBody(req);
-
         let caseFields = body?.case;
         let event = body?.event ?? null;
 
         if (!caseFields && body?.ticket) {
-          caseFields = ticketToCase(body.ticket, {
-            agent: body.agent,
-            resolution: body.resolution
-          });
+          const t = body.ticket;
+          caseFields = {
+            case_ref: t.id,
+            company_id: t.companyId,
+            person_id: t.personId ?? null,
+            account_ref: t.accountRef ?? null,
+            subject: t.subject,
+            note: t.messages?.[0]?.text ?? null,
+            channel: t.channel ?? null,
+            intent: t.intent ?? null,
+            category: t.intent ?? null,
+            sentiment: t.sentiment ?? null,
+            priority: t.priority ?? 'Medium',
+            status: t.status,
+            owner_email: t.assignee || body.agent || null,
+            sla_minutes: t.slaMins ?? null,
+            resolution: body.resolution ?? null,
+            ai_summary: t.aiSummary ?? null,
+            ai_confidence: typeof t.aiConfidence === 'number' ? t.aiConfidence : null,
+            ai_escalate: typeof t.escalate === 'boolean' ? t.escalate : null,
+            next_action: Array.isArray(t.nextSteps) ? t.nextSteps.join('; ') : null,
+            source: 'resolveiq'
+          };
           if (!event && body.resolution) {
             event = {
               kind: 'customer_message',
               direction: 'outbound',
-              author: body.agent || body.ticket.assignee || 'resolveiq',
+              author: body.agent || t.assignee || 'resolveiq',
               body: body.resolution
             };
           }
         }
 
         if (!caseFields) {
-          return sendJson(res, 400, {
-            error: 'Send { "ticket": {...} } or { "case": {...} }.'
-          });
+          return sendJson(res, 400, { error: 'Send { "ticket": {...} } or { "case": {...} }.' });
         }
 
-        const saved = await upsertCase({ case: caseFields, event });
+        const saved = await clientiq.upsertCase({ case: caseFields, event });
+        queueCache = { at: 0, payload: null };   // the queue has changed
 
-        /* Say plainly when the case saved but could not be attached to a
-           customer — an unlinked case never reaches the timeline, and silently
-           dropping it off the customer's record is exactly the failure this
-           whole exercise is meant to prevent. */
+        /* "Saved" is true the moment the case is stored. The Sage CRM
+           communication is queued, not sent — the worker applies it within
+           about five minutes, so saying "saved to Sage CRM" here would be a
+           lie for that whole window. */
         return sendJson(res, 200, {
           ok: true,
           case_ref: saved?.case?.case_ref ?? caseFields.case_ref,
-          linked_to_company: Boolean(saved?.linked_to_company),
-          warning: saved?.linked_to_company
-            ? null
-            : 'Saved, but not linked to a customer — it will not appear on their timeline. The case has no account reference.'
+          queued_to_sage: Boolean(saved?.queued_to_sage),
+          sage_queue_id: saved?.sage_queue_id ?? null,
+          warning: saved?.case?.status === 'resolved' && !saved?.queued_to_sage
+            ? 'Saved here, but the Sage CRM copy could not be queued. Reps working in Sage will not see it.'
+            : null
         });
+      }
+
+      /* Previous contact for one company — the panel that tells an advisor
+         whether this customer has been here before. */
+      if (url.pathname === '/api/history') {
+        const companyId = url.searchParams.get('company_id');
+        if (!companyId) return sendJson(res, 400, { error: 'company_id is required' });
+        return sendJson(res, 200, { history: await clientiq.activity(companyId) });
+      }
+
+      /* Where a queued Sage CRM change has got to. */
+      if (url.pathname === '/api/sage-status') {
+        const queueId = url.searchParams.get('queue_id');
+        if (!queueId) return sendJson(res, 400, { error: 'queue_id is required' });
+        return sendJson(res, 200, { status: await clientiq.sageQueueStatus(queueId) });
+      }
+
+      /* Company search, for attaching a case to a customer. */
+      if (url.pathname === '/api/companies') {
+        const q = url.searchParams.get('q');
+        return sendJson(res, 200, { companies: await clientiq.findCompanies(q) });
       }
 
       if (url.pathname.startsWith('/api/')) {
@@ -253,28 +301,11 @@ export function createApp() {
   });
 }
 
-/* Never echo credentials embedded in a URL back to a client. */
-function redact(urlString) {
-  if (!urlString) return null;
-  try {
-    const u = new URL(urlString);
-    u.username = '';
-    u.password = '';
-    return u.toString();
-  } catch {
-    return null;
-  }
-}
-
 /* Only listen when run directly, so tests can import createApp(). */
 if (process.argv[1] && process.argv[1].endsWith('server/index.mjs')) {
-  if (config.sage.allowInsecureTls) {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-    console.warn('TLS verification disabled for Sage CRM (SAGE_ALLOW_INSECURE_TLS=true)');
-  }
   createApp().listen(config.port, () => {
     console.log(`ResolveIQ on http://localhost:${config.port}`);
-    console.log(`  Sage CRM: ${sageConfigured ? config.sage.baseUrl : 'not configured — serving sample data'}`);
+    console.log(`  ClientiQ: ${clientiqConfigured ? config.clientiq.url : 'not configured — serving sample data'}`);
     console.log(`  Claude:   ${claudeConfigured ? config.claude.model : 'not configured — drafting disabled'}`);
   });
 }

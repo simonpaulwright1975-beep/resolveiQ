@@ -702,3 +702,28 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
 @media (prefers-reduced-motion: reduce) {
   .tour-card, .tour-spot { transition: none; }
 }
+
+/* transient status, for things the drawer closing would otherwise hide */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translate(-50%, 12px);
+  z-index: 95;
+  max-width: min(460px, calc(100vw - 28px));
+  padding: 11px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 12px 32px rgba(60, 30, 20, .26);
+  opacity: 0;
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+.toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+.toast--warn { background: var(--bad); color: #fff; }
+
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }

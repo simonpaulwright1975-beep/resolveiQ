@@ -264,6 +264,46 @@
     }).join('');
   }
 
+  /* ---------- transient status ---------- */
+
+  var toastTimer = null;
+
+  /* Resolving closes the drawer, so anything said there is never read. The
+     Sage CRM copy is queued rather than sent, and the advisor needs to know
+     that — so it is said out here, where it survives the drawer closing. */
+  function toast(message, tone) {
+    if (!message) return;
+    var el = $('toast');
+    el.textContent = message;
+    el.className = 'toast is-on' + (tone ? ' toast--' + tone : '');
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      el.className = 'toast';
+      setTimeout(function () { el.hidden = true; }, 200);
+    }, 6000);
+  }
+
+  /* ---------- previous contact ---------- */
+
+  /* Fetched when a case is opened rather than for the whole queue: one call per
+     case the advisor actually looks at, not 40 they don't. */
+  async function loadHistory(ticket) {
+    if (!ticket.companyId || ticket._historyLoaded) return;
+    ticket._historyLoaded = true;
+    try {
+      var response = await fetch('/api/history?company_id=' + encodeURIComponent(ticket.companyId));
+      if (!response.ok) return;
+      var body = await response.json();
+      if (Array.isArray(body.history) && body.history.length) {
+        ticket.history = body.history;
+        if (state.selected === ticket.id) openDrawer(ticket.id);
+      }
+    } catch (e) {
+      /* The panel already says "no previous contact on record"; leave it. */
+    }
+  }
+
   /* ---------- writing to the customer record ---------- */
 
   /* Returns { ok, warning } or { ok: false, error }. Never throws — the caller
@@ -285,7 +325,7 @@
       if (!response.ok) {
         return { ok: false, error: body.error || ('Could not save — HTTP ' + response.status) };
       }
-      return { ok: true, warning: body.warning || null };
+      return { ok: true, warning: body.warning || null, queuedToSage: Boolean(body.queued_to_sage) };
     } catch (error) {
       return { ok: false, error: 'Could not save to the customer record — ' + error.message };
     }
@@ -430,6 +470,8 @@
           : '<button data-act="reopen">Reopen ticket</button>') +
       '</div>';
 
+    loadHistory(t);
+
     $('drawer').classList.add('open');
     $('drawer').setAttribute('aria-hidden', 'false');
     $('scrim').classList.add('open');
@@ -469,6 +511,13 @@
       }
 
       state.saveNote = outcome.warning || null;
+      toast(
+        outcome.warning ||
+          (outcome.queuedToSage
+            ? 'Saved. The Sage CRM copy is queued and lands within about five minutes.'
+            : 'Saved to the customer record.'),
+        outcome.warning ? 'warn' : null
+      );
       t.status = 'resolved';
       t.waitMins = 0;
       if (!t.assignee) t.assignee = ME;
@@ -497,16 +546,16 @@
 
   function renderSource() {
     var source = DATA.source || 'sample';
-    var text = source === 'sage' ? 'SAGE CRM · LIVE'
-      : source === 'sage-stale' ? 'SAGE CRM · STALE'
+    var text = source === 'clientiq' ? 'CLIENTIQ · LIVE'
+      : source === 'clientiq-stale' ? 'CLIENTIQ · STALE'
       : 'SAMPLE DATA';
     $('source-text').textContent = text;
     $('source-badge').querySelector('.live__dot').style.background =
-      source === 'sage' ? 'var(--good)' : source === 'sage-stale' ? 'var(--warn)' : 'var(--muted)';
+      source === 'clientiq' ? 'var(--good)' : source === 'clientiq-stale' ? 'var(--warn)' : 'var(--muted)';
 
     $('footnote').textContent = DATA.reason
       ? DATA.reason
-      : 'Live from Sage CRM. Drafts are generated on request and are not sent until you send them.';
+      : 'Live from ClientiQ. Resolving a case also queues a Sage CRM note, applied within about five minutes.';
   }
 
   function renderAll() {

@@ -24,7 +24,7 @@
     },
     {
       title: 'Check you’re looking at live work',
-      do: 'Look at the badge up here. It should say SAGE CRM · LIVE.',
+      do: 'Look at the badge up here. It should say CLIENTIQ · LIVE.',
       why: 'SAMPLE DATA means you’re in the demo queue and nothing you do is real. ' +
            'Tell whoever set the app up.',
       anchor: '#source-badge'
@@ -43,6 +43,14 @@
       why: 'Everything about that customer is in one place — you shouldn’t need ' +
            'another system to answer them.',
       anchor: '.drawer__head',
+      setup: function () { app().openFirstTicket(); }
+    },
+    {
+      title: 'Read their history before you reply',
+      do: 'Look at Previous contact in the panel.',
+      why: 'If they have been in touch before, saying so changes the whole ' +
+           'conversation. Customers should never have to repeat themselves.',
+      anchor: '.history',
       setup: function () { app().openFirstTicket(); }
     },
     {

@@ -6,143 +6,79 @@ what's about to breach SLA, and what the AI layer suggests doing about it.
 Cases come from **Sage CRM**. Draft replies come from **Claude**. Neither
 credential ever reaches the browser.
 
-## Where this has to run
+## What it connects to
 
-**Sage CRM is LAN-only.** It lives at `http://WG-SQL-01/...`, which is not
-reachable from outside the Geerings network. So this app's server must run on
-WG-SQL-01 or another machine on that LAN. A cloud-hosted copy will always fall
-back to sample data, however it is configured.
+**ClientiQ** — the customer database in the WG Main Supabase project. Not Sage
+CRM, and not the LAN: ResolveIQ never touches either, so it can run anywhere
+with outbound HTTPS.
 
-Claude drafting needs outbound HTTPS to `api.anthropic.com`, so whichever box
-runs it needs the CRM on one side and the internet on the other.
+```
+ResolveIQ ──read──►  public.vw_crm_*          companies, contacts, activity
+ResolveIQ ──write─►  public.resolveiq_cases   its own cases
+          └────────► crm_queue_change ──► on-prem worker ──► Sage CRM
+```
+
+Auth is the publishable key plus a **signed-in WG account**. The service-role
+key is not supported — it bypasses every permission check, and the app warns
+loudly if it finds one in its environment.
 
 ## Running it
 
 ```bash
 npm install
-cp .env.example .env     # fill in your Sage CRM details and API key
-npm run check-sage       # verify the connection before starting
+cp .env.example .env     # ClientiQ account + an Anthropic key
 npm start                # http://localhost:3000
+npm test                 # 20 tests, no credentials needed
 ```
 
-`npm run check-sage` reports what the CRM actually returns: whether it answers,
-which entities are exposed to web services, the field names on the case entity,
-and whether the mapping resolves them. It prints **names and counts only, never
-field values**, so the output is safe to share.
-
-It runs with nothing configured: no Sage CRM means the queue falls back to
-bundled sample tickets, and no API key means the "Draft a reply" button returns
-a clear message instead of a draft. The badge in the top right always says which
-source you're looking at — `SAGE CRM · LIVE`, `SAGE CRM · STALE`, or
-`SAMPLE DATA`.
-
-```bash
-npm test                 # 36 tests, no credentials needed
-```
+It runs with nothing configured: no ClientiQ means the sample queue, no API key
+means "Draft a reply" explains it is off. The badge says which you are looking
+at — `CLIENTIQ · LIVE`, `CLIENTIQ · STALE`, or `SAMPLE DATA`.
 
 ## What's on the screen
 
-- **KPI row** — open tickets, resolved today, auto-resolved share, average
-  handling time, CSAT.
-- **Open tickets by intent** — where the volume actually is.
-- **SLA compliance gauge** — share of open cases still inside their window.
-- **Live queue** — sorted most urgent first: breaching, then at-risk, then
-  longest waiting. Filter by status, search by customer, subject or reference.
-- **Ticket drawer** — the conversation, previous contact, and a drafted
-  resolution with a confidence score, suggested next steps and an escalation
-  flag. Claim, snooze, or send-and-resolve.
+- **KPI row** — open tickets and the SLA dial are real. Resolved today, average
+  handling time, auto-resolved and CSAT show `—` until something supplies them.
+- **Open tickets by intent**, and an **SLA compliance dial**.
+- **Live queue** — most urgent first: breached, then at risk, then longest
+  waiting. Filter by status, search by customer, subject or reference.
+- **Ticket drawer** — the case, **previous contact from the customer's real
+  activity feed**, and a drafted resolution with a confidence score and an
+  escalation flag.
 
-## Sage CRM integration
+## The key: company_id
 
-`server/sage.mjs` talks to Sage CRM's SData REST API. The contract was taken
-from Sage's own reference client
-([Sage/sage_crm_rest_api_client](https://github.com/Sage/sage_crm_rest_api_client)):
+Everything is keyed on `company_id`, the Sage CRM company id.
 
-| | |
-|---|---|
-| Base URL | `{server}/sdata/{install}j/{contract}/-/` |
-| Geerings | `http://WG-SQL-01/sdata/crmj/sagecrm/-/` |
-| Auth | HTTP Basic — the CRM user needs **Allow Webservices = True** |
-| Format | **Atom XML.** This install errors on `Accept: application/json` |
-| Collection | `GET {base}case` → an Atom feed of `<entry>` / `<payload>` elements |
-| Record | `GET {base}case('41')` → a single entry |
-| Metadata | `GET {base}$prototypes` — every entity exposed to web services |
+`account_ref` (the Sage 200 code) is carried where present but **never relied
+on** — only 2,927 of 28,005 companies (10.5%) have one. A null `account_ref` is
+normal, not missing data. An earlier version of this app keyed on `account_ref`
+and could only ever have covered a tenth of the customer base.
 
-The contract segment differs between installs (`sagecrm` here, `sagecrm2`
-elsewhere), so it's configurable via `SAGE_CONTRACT`.
+## Previous contact
 
-`server/sdata-xml.mjs` flattens the Atom feed into the same record shape a JSON
-reply would give, so the mapping layer is unchanged by the transport. It matches
-on **local element names**, not namespace prefixes, since servers choose their
-own. If an install does serve JSON, the client still handles it — it branches on
-the response content type.
+Read from `vw_crm_company_activity`, fetched when a case is opened rather than
+for the whole queue. Scheduled items are flagged: `occurred_at` is the completed
+time where there is one and the booked time where there is not, so a task
+diarised for next March would otherwise read as this morning's call.
 
-Support **cases** are the queue. Linked `Company` and `Person` records supply
-the customer, and `communication` records supply previous contact.
+## Resolving a case
 
-### Field names
+Resolving does two things — both, deliberately:
 
-Sage CRM installs rename columns and add custom fields, so nothing assumes a
-single spelling. Every read goes through `pick()`, which tries a list of
-candidates and matches case-insensitively with or without the entity prefix —
-`case_description`, `Description` and `description` all resolve. A field it
-can't find falls back to a default rather than throwing, so one renamed column
-can't take the queue offline.
+1. Writes the case to `public.resolveiq_cases`.
+2. Queues a Sage CRM communication via `crm_queue_change`, so a rep working in
+   Sage rather than ClientiQ still sees the care activity.
 
-If your install uses names nothing matches, add them to the candidate lists in
-`mapCase()` — that function is the whole mapping, and it's unit-tested.
+**The save happens first, and the case is only marked done if it succeeds.** If
+the write fails the case stays open and the advisor is told it has not been
+resolved — a case shown as finished when nothing was recorded is the failure
+this app exists to prevent.
 
-### Derived fields
-
-Three things the console shows are not Sage CRM columns, so they're computed:
-
-- **SLA window** — from case priority, via `SLA_POLICY` (default: High 20min,
-  Medium 60, Low 240). A case is *breached* once the wait exceeds the window and
-  *at risk* from 70% of it.
-- **Intent** and **sentiment** — keyword rules over the case text, as a first
-  pass. When you draft a reply, Claude's own reading of both replaces the guess.
-- **Status** — Sage's status/stage vocabulary is mapped onto the four the UI
-  uses (`new`, `open`, `pending`, `resolved`); "Closed", "Awaiting Customer" and
-  friends all land somewhere sensible.
-
-Metrics the CRM genuinely cannot answer — average handling time, CSAT,
-automation rate — render as `—` with "not tracked in Sage CRM" rather than
-borrowing a number. Wire them to whatever system does hold them, or drop the
-tiles.
-
-## The central customer record
-
-Resolving a case writes it to the shared WG customer record in Supabase — see
-`db/README.md`. That write is what puts the case on the customer's timeline, so
-it is the point of the app rather than a side effect.
-
-Writes go through one database function, `public.resolveiq_upsert_case`, not
-straight at the tables. Three reasons: the `core` schema is not in Supabase's
-exposed-schemas list so `/rest/v1/cases` would 404; validation and the lifecycle
-timestamps belong in one place rather than in every producer; and it is
-idempotent on `case_ref`, so retrying after a timeout is safe.
-
-**Resolving saves first and only then marks the case done.** If the write fails,
-the case stays open and the advisor is told it has not been resolved. Showing a
-case as finished when nothing was recorded is the exact failure this app exists
-to prevent, so it is not allowed to happen quietly.
-
-A case that saves but cannot be matched to a customer is still stored — losing
-it would be worse — but the response says so, because an unlinked case never
-reaches the timeline.
-
-`POST /api/cases` also accepts a raw case, so Call iQ can post call summaries to
-the same endpoint without knowing anything about the console's shapes.
-
-### Writes need SOAP, not SData
-
-SData is read-only. Creating or updating records goes through the SOAP endpoint
-at `{server}/CRM/eware.dll/webservice` — logon, then carry the session in a
-`<SessionHeader>` for add/update/query/delete. **This app does not write to the
-CRM at all yet**; it only reads. The Call iQ worker
-(`wg-calls/onprem/sage-crm-worker/`) has working SOAP helpers and the
-hard-won gotchas (field-prefix stripping, the plural `users` entity, `comm_link`
-linking, the buggy delete) if writes are added later.
+The Sage copy is **queued, not sent**: the on-prem worker applies it within about
+five minutes. The app says "queued", never "saved to Sage CRM", until it is. A
+failed queue does not fail the case; the case is saved and the advisor is told
+the Sage copy did not go.
 
 ## Claude integration
 
@@ -169,8 +105,11 @@ model inside the same call, add the `fallbacks` parameter — see the
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/health` | What's configured and whether the CRM answers. Credentials are redacted. |
-| `GET` | `/api/tickets` | The queue. Cached for `SAGE_CACHE_SECONDS`; serves the last good result if the CRM goes down. |
+| `GET` | `/api/health` | What's configured and whether ClientiQ answers. |
+| `GET` | `/api/tickets` | The queue. Cached briefly; serves the last good result if ClientiQ is unreachable. |
+| `GET` | `/api/history?company_id=` | Previous contact for one company. |
+| `GET` | `/api/companies?q=` | Company search, for attaching a case. |
+| `GET` | `/api/sage-status?queue_id=` | Where a queued Sage CRM change has got to. |
 | `POST` | `/api/suggest` | `{ "ticket": {...} }` → a drafted resolution. |
 | `POST` | `/api/cases` | Write a case to the central customer record. Takes `{ "ticket": {...}, "resolution": "..." }` from the console, or `{ "case": {...}, "event": {...} }` from any other producer. |
 
@@ -193,23 +132,25 @@ App settings are namespaced `RESOLVEIQ_*` so they can't collide with an ambient
 
 ## Testing
 
-`npm test` runs 36 tests against fake Sage CRM and Anthropic servers that speak
-the real wire formats, so the client code, mapping, HTTP surface and error paths
-are all exercised without credentials or network access.
+`npm test` runs 20 tests against fake ClientiQ and Anthropic servers speaking
+the real wire formats — the client, mapping, HTTP surface and error paths, with
+no credentials or network.
 
-**Not yet run against the live CRM or a real API key.** The transport details
-(LAN-only, XML not JSON, the `sagecrm` contract segment, Basic auth) come from
-the working Call iQ connection. The Atom element structure is the standard SData
-shape and is covered by tests, but the first real response is what will confirm
-it — that is what `npm run check-sage` is for.
+**Not yet run against live ClientiQ or a real API key.** The RPC was smoke-tested
+directly against WG Main — case stored, company linked, Sage communication
+queued, idempotent on a second post — and the test row and its queue entry were
+deleted before the on-prem worker could pick them up. Everything else is covered
+by the fake servers.
 
-Two things are genuinely unknown until then:
+Two things still to build:
 
-1. **Whether the `case` entity is exposed to web services** on this install. The
-   Call iQ worker uses company/person/communication/comm_link/users. If cases
-   aren't exposed, the queue needs either that entity enabled or a different
-   source. `check-sage` answers this in section 2.
-2. **The exact case field names.** `check-sage` prints them in section 3.
+1. **Creating a case.** Sage CRM cases are not mirrored into Supabase, so
+   ResolveIQ's queue is its own cases and there is no way to raise one yet.
+2. **Cases inside ClientiQ.** A third `union all` branch in
+   `vw_crm_company_activity` with `source = 'resolveiq'`, plus an open-case count
+   on the company card. The column names here (`company_id`, `opened_at`,
+   `closed_at`, `status`, `subject`, `note`) were chosen to make that branch
+   nearly trivial.
 
 ## Static build
 
