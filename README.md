@@ -28,7 +28,7 @@ loudly if it finds one in its environment.
 npm install
 cp .env.example .env     # ClientiQ account + an Anthropic key
 npm start                # http://localhost:3000
-npm test                 # 20 tests, no credentials needed
+npm test                 # 25 tests, no credentials needed
 ```
 
 It runs with nothing configured: no ClientiQ means the sample queue, no API key
@@ -45,6 +45,20 @@ at — `CLIENTIQ · LIVE`, `CLIENTIQ · STALE`, or `SAMPLE DATA`.
 - **Ticket drawer** — the case, **previous contact from the customer's real
   activity feed**, and a drafted resolution with a confidence score and an
   escalation flag.
+
+## Raising a case
+
+**New case** in the masthead. Search for the customer by name or Sage account
+code, pick them, optionally name a contact, then subject, detail, channel and
+priority.
+
+The company is not optional and the form will not submit without one — a case
+with no `company_id` cannot reach a customer record, and the database refuses
+it. Everything else can be filled in later.
+
+The case reference is issued by the database rather than the browser, so two
+agents raising a case at the same moment cannot collide. A new case is **not**
+mirrored into Sage CRM; that happens when it is resolved.
 
 ## The key: company_id
 
@@ -109,6 +123,7 @@ model inside the same call, add the `fallbacks` parameter — see the
 | `GET` | `/api/tickets` | The queue. Cached briefly; serves the last good result if ClientiQ is unreachable. |
 | `GET` | `/api/history?company_id=` | Previous contact for one company. |
 | `GET` | `/api/companies?q=` | Company search, for attaching a case. |
+| `GET` | `/api/contacts?company_id=` | People at a company, for the contact picker. |
 | `GET` | `/api/sage-status?queue_id=` | Where a queued Sage CRM change has got to. |
 | `POST` | `/api/suggest` | `{ "ticket": {...} }` → a drafted resolution. |
 | `POST` | `/api/cases` | Write a case to the central customer record. Takes `{ "ticket": {...}, "resolution": "..." }` from the console, or `{ "case": {...}, "event": {...} }` from any other producer. |
@@ -132,7 +147,7 @@ App settings are namespaced `RESOLVEIQ_*` so they can't collide with an ambient
 
 ## Testing
 
-`npm test` runs 20 tests against fake ClientiQ and Anthropic servers speaking
+`npm test` runs 25 tests against fake ClientiQ and Anthropic servers speaking
 the real wire formats — the client, mapping, HTTP surface and error paths, with
 no credentials or network.
 
@@ -142,11 +157,9 @@ queued, idempotent on a second post — and the test row and its queue entry wer
 deleted before the on-prem worker could pick them up. Everything else is covered
 by the fake servers.
 
-Two things still to build:
+Still to build:
 
-1. **Creating a case.** Sage CRM cases are not mirrored into Supabase, so
-   ResolveIQ's queue is its own cases and there is no way to raise one yet.
-2. **Cases inside ClientiQ.** A third `union all` branch in
+1. **Cases inside ClientiQ.** A third `union all` branch in
    `vw_crm_company_activity` with `source = 'resolveiq'`, plus an open-case count
    on the company card. The column names here (`company_id`, `opened_at`,
    `closed_at`, `status`, `subject`, `note`) were chosen to make that branch

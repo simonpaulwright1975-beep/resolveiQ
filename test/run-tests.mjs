@@ -245,6 +245,66 @@ test('GET /api/sage-status reports where a queued change has got to', async () =
   });
 });
 
+test('module scripts are served as JavaScript', async () => {
+  /* Regression: .mjs was missing from the MIME map, so the browser refused to
+     execute it and the New case dialog silently did not exist. */
+  await withApp(async (base) => {
+    const res = await fetch(`${base}/assets/new-case.mjs`);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /javascript/);
+  });
+});
+
+test('GET /api/contacts returns people for a company', async () => {
+  await withApp(async (base) => {
+    const res = await fetch(`${base}/api/contacts?company_id=23508`);
+    assert.equal(res.status, 200);
+    assert.ok(Array.isArray((await res.json()).contacts));
+  });
+});
+
+test('GET /api/contacts without a company is rejected', async () => {
+  await withApp(async (base) => {
+    assert.equal((await fetch(`${base}/api/contacts`)).status, 400);
+  });
+});
+
+test('POST /api/cases forwards what the agent chose, unaltered', async () => {
+  /* Regression: the dialog re-rendered before reading its own fields, so
+     priority, channel, note and contact were replaced by defaults. */
+  await withApp(async (base) => {
+    await fetch(`${base}/api/cases`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        case: {
+          company_id: 23508, person_id: 96695, subject: 'Damaged delivery',
+          note: 'Four boxes crushed.', channel: 'Voice', priority: 'High',
+          status: 'new', source: 'resolveiq'
+        }
+      })
+    });
+    const sent = cq.received.at(-1).body.payload.case;
+    assert.equal(sent.priority, 'High');
+    assert.equal(sent.channel, 'Voice');
+    assert.equal(sent.note, 'Four boxes crushed.');
+    assert.equal(sent.person_id, 96695);
+    assert.equal(sent.status, 'new');
+  });
+});
+
+test('a new case may omit case_ref — the database issues one', async () => {
+  await withApp(async (base) => {
+    const body = await (await fetch(`${base}/api/cases`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ case: { company_id: 23508, subject: 'No ref supplied', status: 'new' } })
+    })).json();
+    assert.ok(body.case_ref, 'a reference must come back');
+    assert.equal(body.queued_to_sage, false, 'a new case must not touch Sage CRM yet');
+  });
+});
+
 test('unknown API routes 404 as JSON', async () => {
   await withApp(async (base) => {
     const res = await fetch(`${base}/api/nope`);

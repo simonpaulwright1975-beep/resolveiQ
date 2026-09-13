@@ -730,6 +730,102 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
 
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 
+/* ---------- new case ---------- */
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -48%);
+  z-index: 60;
+  width: min(460px, calc(100vw - 24px));
+  max-height: min(86vh, 760px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 24px 64px rgba(60, 30, 20, .26);
+  opacity: 0;
+  transition: opacity .16s ease, transform .16s ease;
+}
+
+.modal.open { opacity: 1; transform: translate(-50%, -50%); }
+
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 17px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal__title { margin: 0; font-size: 17px; font-weight: 750; letter-spacing: -.01em; }
+.modal__body { padding: 15px 17px 4px; }
+
+.modal__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 13px 17px 15px;
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+}
+
+.nc-field { display: block; margin-bottom: 13px; }
+.nc-field > .label { display: block; margin-bottom: 5px; }
+
+.nc-field input,
+.nc-field select,
+.nc-field textarea {
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 11px;
+}
+
+.nc-field textarea { resize: vertical; min-height: 62px; }
+.nc-field input::placeholder, .nc-field textarea::placeholder { color: var(--muted); }
+
+.nc-hint { display: block; margin-top: 5px; font-size: 12px; color: var(--muted); }
+
+.nc-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.nc-results { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 5px; max-height: 260px; overflow-y: auto; }
+
+.nc-results button {
+  width: 100%;
+  text-align: left;
+  padding: 8px 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.nc-results button:hover { background: var(--accent-soft); border-color: var(--accent-soft); }
+.nc-results strong { display: block; font-weight: 650; font-size: 13.5px; }
+.nc-results small, .nc-picked small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 1px; }
+
+.nc-picked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+}
+
+.nc-picked strong { font-size: 14px; font-weight: 700; color: var(--accent-ink); }
+.nc-picked button { padding: 4px 10px; font-size: 12px; }
+
+button:disabled { opacity: .5; cursor: not-allowed; }
+
+@media (prefers-reduced-motion: reduce) { .modal { transition: none; } }
+
 </style>
 
 <div class="wrap">
@@ -744,6 +840,7 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
       </div>
       <div class="masthead__meta">
         <span class="live" id="source-badge"><span class="live__dot"></span> <span id="source-text">CONNECTING</span></span>
+        <button class="primary" id="new-case-btn">New case</button>
         <button id="how-it-works" title="A short walkthrough of how to work the queue">How it works</button>
         <button id="reset" title="Restore the sample queue to its starting state">Reset demo</button>
       </div>
@@ -819,6 +916,21 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+  <div class="scrim" id="nc-scrim"></div>
+  <section class="modal" id="new-case" role="dialog" aria-modal="true"
+           aria-labelledby="nc-title" hidden>
+    <div class="modal__head">
+      <h2 class="modal__title" id="nc-title">New case</h2>
+      <button class="icon-btn" data-nc="close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal__body" id="nc-body"></div>
+    <p class="draft-error" id="nc-error" hidden></p>
+    <div class="modal__foot">
+      <button data-nc="close">Cancel</button>
+      <button class="primary" id="nc-submit" data-nc="submit" disabled>Raise case</button>
+    </div>
+  </section>
+
   <div class="scrim" id="scrim"></div>
 
   <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" aria-hidden="true">
@@ -832,6 +944,7 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
     </div>
     <div class="drawer__body" id="drawer-body"></div>
   </aside>
+  <script type="module" src="assets/new-case.mjs"></script>
 
 <script>
 /* Sample queue data for ResolveIQ.
@@ -1252,7 +1365,7 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
     /* A delta needs both halves. Missing either means we say nothing rather
        than inventing a comparison. */
     var delta = function (now, before, unit, higherIsBetter) {
-      if (!has(now) || !has(before)) return { text: 'not tracked in Sage CRM', tone: 'muted' };
+      if (!has(now) || !has(before)) return { text: 'no source for this yet', tone: 'muted' };
       var d = now - before;
       var better = higherIsBetter ? d >= 0 : d <= 0;
       return {
@@ -1772,7 +1885,20 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
         var first = visibleTickets()[0];
         if (first) openDrawer(first.id);
       },
-      closeDrawer: function () { if (state.selected) closeDrawer(); }
+      closeDrawer: function () { if (state.selected) closeDrawer(); },
+
+      /* Called after a case is raised: pull the queue again and open the new
+         case, so the agent lands on the thing they just created. */
+      reload: async function (caseRef) {
+        DATA = await window.RESOLVEIQ_LOAD();
+        hydrate();
+        renderSource();
+        renderAll();
+        toast(caseRef ? 'Case ' + caseRef + ' raised.' : 'Case raised.');
+        if (caseRef && state.tickets.some(function (t) { return t.id === caseRef; })) {
+          openDrawer(caseRef);
+        }
+      }
     };
 
     $('reset').addEventListener('click', function () {

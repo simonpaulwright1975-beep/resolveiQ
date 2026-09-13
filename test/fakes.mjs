@@ -83,14 +83,16 @@ export function fakeClientiq({ failWith = null, queueFails = false, signInFails 
     if (req.url.startsWith('/rest/v1/rpc/resolveiq_upsert_case')) {
       const c = body?.payload?.case || {};
       if (!c.company_id) return json(400, { message: 'company_id is required' });
-      const existing = stored.get(c.case_ref);
-      const row = Object.assign({ id: 'uuid-' + stored.size }, existing, c, {
+      const ref = c.case_ref || 'RQ-0' + (2000 + stored.size);
+      const existing = stored.get(ref);
+      const row = Object.assign({ id: 'uuid-' + stored.size, case_ref: ref }, existing, c, {
+        case_ref: ref,
         closed_at: c.status === 'resolved' ? new Date().toISOString() : null
       });
       if (c.status === 'resolved' && !row.sage_queue_id && !queueFails) {
         row.sage_queue_id = nextQueueId++;
       }
-      stored.set(c.case_ref, row);
+      stored.set(ref, row);
       return json(200, {
         case: row,
         queued_to_sage: Boolean(row.sage_queue_id),

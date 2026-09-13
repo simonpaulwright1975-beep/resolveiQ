@@ -23,6 +23,9 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  /* Without this a module script is served as octet-stream and the browser
+     refuses to execute it — silently, with the feature simply absent. */
+  '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
@@ -280,6 +283,13 @@ export function createApp() {
         const queueId = url.searchParams.get('queue_id');
         if (!queueId) return sendJson(res, 400, { error: 'queue_id is required' });
         return sendJson(res, 200, { status: await clientiq.sageQueueStatus(queueId) });
+      }
+
+      /* People at a company, for the contact picker. */
+      if (url.pathname === '/api/contacts') {
+        const companyId = url.searchParams.get('company_id');
+        if (!companyId) return sendJson(res, 400, { error: 'company_id is required' });
+        return sendJson(res, 200, { contacts: await clientiq.contacts(companyId) });
       }
 
       /* Company search, for attaching a case to a customer. */

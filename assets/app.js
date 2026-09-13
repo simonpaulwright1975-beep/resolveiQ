@@ -99,7 +99,7 @@
     /* A delta needs both halves. Missing either means we say nothing rather
        than inventing a comparison. */
     var delta = function (now, before, unit, higherIsBetter) {
-      if (!has(now) || !has(before)) return { text: 'not tracked in Sage CRM', tone: 'muted' };
+      if (!has(now) || !has(before)) return { text: 'no source for this yet', tone: 'muted' };
       var d = now - before;
       var better = higherIsBetter ? d >= 0 : d <= 0;
       return {
@@ -619,7 +619,20 @@
         var first = visibleTickets()[0];
         if (first) openDrawer(first.id);
       },
-      closeDrawer: function () { if (state.selected) closeDrawer(); }
+      closeDrawer: function () { if (state.selected) closeDrawer(); },
+
+      /* Called after a case is raised: pull the queue again and open the new
+         case, so the agent lands on the thing they just created. */
+      reload: async function (caseRef) {
+        DATA = await window.RESOLVEIQ_LOAD();
+        hydrate();
+        renderSource();
+        renderAll();
+        toast(caseRef ? 'Case ' + caseRef + ' raised.' : 'Case raised.');
+        if (caseRef && state.tickets.some(function (t) { return t.id === caseRef; })) {
+          openDrawer(caseRef);
+        }
+      }
     };
 
     $('reset').addEventListener('click', function () {

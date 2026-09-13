@@ -132,11 +132,19 @@ export async function company(companyId, { signal } = {}) {
   return rows?.[0] ?? null;
 }
 
+/* People at a company, primary first. Inactive contacts are left out — a case
+   raised against someone who has left helps nobody. opted_out is carried
+   through so the UI can mark it: it is a marketing preference, not a bar on
+   answering a support case, so it warns rather than hides. */
 export async function contacts(companyId, { signal } = {}) {
-  return (await request(
-    `vw_crm_company_contacts?company_id=eq.${encodeURIComponent(companyId)}`,
+  const rows = await request(
+    `vw_crm_company_contacts?company_id=eq.${encodeURIComponent(companyId)}` +
+      `&is_active=is.true` +
+      `&select=person_id,full_name,job_title,email,phone,mobile,is_primary,opted_out` +
+      `&order=is_primary.desc,full_name.asc&limit=50`,
     { signal }
-  )) ?? [];
+  );
+  return rows ?? [];
 }
 
 /* Previous contact for the case panel. Newest first, and scheduled items are
@@ -165,10 +173,15 @@ export async function activity(companyId, { limit = 8, signal } = {}) {
 export async function findCompanies(query, { limit = 10, signal } = {}) {
   const q = String(query || '').trim();
   if (!q) return [];
-  const encoded = encodeURIComponent(`*${q}*`);
+  /* PostgREST treats , and . as syntax inside or=(), so a query containing
+     them would corrupt the filter rather than just failing. */
+  const safe = q.replace(/[(),.*:]/g, ' ').trim();
+  if (!safe) return [];
+  const encoded = encodeURIComponent(`*${safe}*`);
   return (await request(
     `vw_crm_company_list?or=(name.ilike.${encoded},account_ref.ilike.${encoded})` +
-      `&select=company_id,name,account_ref,primary_contact_name&limit=${limit}`,
+      `&select=company_id,name,account_ref,primary_contact_name,city,postcode,trading_status` +
+      `&order=name.asc&limit=${limit}`,
     { signal }
   )) ?? [];
 }
