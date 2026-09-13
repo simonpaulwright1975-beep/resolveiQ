@@ -1,0 +1,43 @@
+-- ============================================================================
+-- Realtime on dialpad_calls
+-- ============================================================================
+-- APPLIED to WG Main. The supabase_realtime publication now covers 13 tables.
+--
+-- ⚠ SHARED INFRASTRUCTURE. dialpad_calls belongs to Call iQ; this was enabled
+-- from the ResolveIQ side at the owner's request. If Call iQ manages the
+-- publication in its own migrations, fold this in.
+--
+-- Safe on its own: Realtime enforces row level security, and dialpad_calls has
+-- RLS ENABLED WITH NO POLICIES — so anon and authenticated subscribers receive
+-- nothing at all today. Enabling the publication cannot leak anything.
+--
+-- It is also not sufficient on its own. See below.
+-- ============================================================================
+
+alter publication supabase_realtime add table public.dialpad_calls;
+
+-- ----------------------------------------------------------------------------
+-- What Call iQ still needs, depending on where it subscribes
+-- ----------------------------------------------------------------------------
+--
+-- Subscribing from a SERVER with the service key:
+--   Works now. service_role bypasses RLS. The server receives the event and
+--   pushes it to the advisor's browser over its own channel. Nothing else to do.
+--
+-- Subscribing from the BROWSER as a signed-in user:
+--   Receives nothing until a SELECT policy exists. The obvious one — a rep sees
+--   their own calls and nobody else's — is below, NOT APPLIED. It decides who
+--   may read call records, including customer phone numbers and AI recaps, so
+--   it belongs to whoever owns that data rather than to this repo.
+--
+--     create policy dialpad_calls_own_calls on public.dialpad_calls
+--       for select to authenticated
+--       using (rep_email = auth.jwt() ->> 'email');
+--
+--   Note this would also open dialpad_calls to any signed-in WG account for
+--   their own rows — today nothing outside the service role can read it at all,
+--   so that is a widening, however reasonable.
+--
+-- Replica identity is 'default', which carries the full new row on INSERT —
+-- what the wrap-up card needs. Filtering UPDATE events on previous values would
+-- additionally require REPLICA IDENTITY FULL.

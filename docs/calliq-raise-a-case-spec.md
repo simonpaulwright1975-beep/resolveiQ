@@ -212,18 +212,35 @@ supabase.from('vw_crm_company_contacts')
 
 ---
 
-## One thing to enable first
+## Realtime — done, with a caveat
 
-**Supabase Realtime is not enabled on `dialpad_calls`.** The
-`supabase_realtime` publication covers 12 tables and that is not one of them, so
-there is no push today.
+**Realtime is now enabled on `dialpad_calls`** (publication `supabase_realtime`,
+13 tables). Applied from the ResolveIQ side; the SQL is in
+`db/migrations/0003_realtime_on_dialpad_calls.sql` so Call iQ can fold it in.
+
+**But it is not sufficient on its own**, and which half you need depends on
+where you subscribe:
+
+| Subscribing from | Works today? |
+|---|---|
+| A **server** holding the service key | **Yes.** `service_role` bypasses RLS. Receive the event server-side and push it to the advisor's browser over your own channel. |
+| The **browser**, as a signed-in user | **No.** `dialpad_calls` has RLS enabled with **zero policies**, so an authenticated subscriber receives nothing. |
+
+For the browser route someone must add a SELECT policy. The obvious one:
 
 ```sql
-alter publication supabase_realtime add table public.dialpad_calls;
+create policy dialpad_calls_own_calls on public.dialpad_calls
+  for select to authenticated
+  using (rep_email = auth.jwt() ->> 'email');
 ```
 
-Then subscribe filtered to the signed-in rep, so an advisor is never shown
-someone else's call:
+That is deliberately **not applied**. It decides who may read call records —
+customer phone numbers, AI recaps — and today nothing outside the service role
+can read the table at all, so it is a widening however reasonable it looks. It
+belongs to whoever owns that data.
+
+Once a policy exists, subscribe filtered to the signed-in rep so an advisor is
+never shown someone else's call:
 
 ```js
 supabase.channel('my-calls')
