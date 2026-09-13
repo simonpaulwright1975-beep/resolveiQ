@@ -10,13 +10,26 @@ ResolveIQ's cases live in **WG Main**, alongside ClientiQ, in `public`.
 | `public.resolveiq_case_events` | What was done on a case, internal and customer-facing |
 | `public.resolveiq_upsert_case(jsonb)` | The one write path: upserts a case and, once resolved, queues the Sage CRM communication exactly once |
 | `public.vw_crm_company_activity` | **ClientiQ's view**, extended here with a third `union all` branch so cases appear in the company activity feed |
+| `public.vw_crm_company_list` | **ClientiQ's view**, extended here with an `open_cases` count |
 
-## The activity feed branch — read this
+## Two ClientiQ views were changed — read this
 
-`vw_crm_company_activity` belongs to ClientiQ. It was changed **out of band**
-from this repo. The SQL is in `db/migrations/0001_activity_feed_resolveiq_branch.sql`
-and should be folded into ClientiQ's own migration, or their next deploy will
-silently drop ResolveIQ off the feed.
+`vw_crm_company_activity` and `vw_crm_company_list` belong to ClientiQ. Both
+were changed **out of band** from this repo:
+
+| File | Change |
+|---|---|
+| `0001_activity_feed_resolveiq_branch.sql` | A third `union all` branch, `source = 'resolveiq'` |
+| `0002_company_list_open_case_count.sql` | An `open_cases` column appended |
+
+**Both need folding into ClientiQ's own migrations.** Otherwise their next
+deploy silently drops ResolveIQ off the feed and blanks the open-case count —
+and nobody notices until a rep asks where the care cases went.
+
+The list view's 58 existing columns are preserved by reading the live
+definition and wrapping it, rather than retyping them. Verified: columns 1–58
+unchanged and in order, `open_cases` appended at 59, and a name search measured
+53.0 ms before against 48.7 ms after.
 
 The existing branches are reproduced exactly. Verified before and after:
 `sage_crm` 34,338 rows and `calliq` 2,004 rows, unchanged.
