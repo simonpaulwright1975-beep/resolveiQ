@@ -218,26 +218,34 @@ supabase.from('vw_crm_company_contacts')
 13 tables). Applied from the ResolveIQ side; the SQL is in
 `db/migrations/0003_realtime_on_dialpad_calls.sql` so Call iQ can fold it in.
 
-**But it is not sufficient on its own**, and which half you need depends on
-where you subscribe:
+**The SELECT policy is now applied too** (`0004`): a signed-in rep may read
+their own calls. Verified by impersonation against the live table — a rep sees
+exactly their own 1,461 calls and none of the 1,317 belonging to other reps.
 
-| Subscribing from | Works today? |
+So the browser route works. Two things it does not cover:
+
+**Writes.** The policy is SELECT only. Setting `dismissed_at` or
+`logged_call_id` from the browser needs an UPDATE policy, which has not been
+granted. Do those server-side, or ask for the policy.
+
+**Calls with no rep.** This is the one that will bite:
+
+| | |
 |---|---|
-| A **server** holding the service key | **Yes.** `service_role` bypasses RLS. Receive the event server-side and push it to the advisor's browser over your own channel. |
-| The **browser**, as a signed-in user | **No.** `dialpad_calls` has RLS enabled with **zero policies**, so an authenticated subscriber receives nothing. |
+| `rep_email` null | 3,227 of 6,005 calls (54%) |
+| **Inbound calls attributed to a rep** | **30.1%** (499 of 1,658) |
 
-For the browser route someone must add a SELECT policy. The obvious one:
+Inbound is exactly the customer-service case. **Seven in ten of the calls this
+feature exists for are invisible to every rep**, and the card will not appear
+for them.
 
-```sql
-create policy dialpad_calls_own_calls on public.dialpad_calls
-  for select to authenticated
-  using (rep_email = auth.jwt() ->> 'email');
-```
+That is a data problem, not a policy problem — the fix is to populate
+`rep_email` on inbound calls in the Dialpad sync. Widening the policy to include
+unattributed rows would expose 3,227 calls, with customer phone numbers, to
+every signed-in WG account, so it is not a workaround to apply quietly.
 
-That is deliberately **not applied**. It decides who may read call records —
-customer phone numbers, AI recaps — and today nothing outside the service role
-can read the table at all, so it is a widening however reasonable it looks. It
-belongs to whoever owns that data.
+Until attribution is fixed, the server-subscribe route (service key, no policy
+needed) is the only one that sees every call.
 
 Once a policy exists, subscribe filtered to the signed-in rep so an advisor is
 never shown someone else's call:
