@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ResolveiQ — Walter Geering</title>
+  <meta name="description" content="Customer Care Resolution App — part of the Walter Geering iQ application suite.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d5a3b'/%3E%3Cpath d='M9 16.5 L14 21.5 L23 11' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- styles.css carries the WG Platforms tokens. Linking it here rather than
+       duplicating the :root block means the landing page and the console can
+       never drift apart. -->
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/landing.css">
+</head>
+<body class="landing">
+
+  <!-- ==================================================================
+       THE ONLY BLOCK THAT CHANGES BETWEEN APPS.
+
+       Copy this file into any WG iQ app and edit these five values. The
+       illustrated scene, composition, Walter Geering branding and styling
+       stay exactly as they are — that is what makes the suite feel like
+       one family rather than unrelated software.
+       ================================================================== -->
+  <script>
+    window.WG_APP = {
+      APP_LOGO:      'assets/logo.svg',
+      APP_NAME:      'ResolveiQ',
+      /* null when the supplied logo already contains the strapline. The brief
+         is explicit: do not recreate the strapline independently if it is part
+         of the artwork — you would end up with it twice, at two sizes. */
+      APP_STRAPLINE: null,
+      APP_ENTRY_TEXT:'Enter ResolveiQ',
+      APP_URL:       '/'
+    };
+  </script>
+
+  <!-- The illustrated Walter Geering environment. Decorative: the page still
+       reads correctly without it, which matters because on a narrow screen it
+       is deliberately reduced to a band. -->
+  <div class="scene" role="presentation"></div>
+
+  <main class="entry">
+    <div class="panel">
+      <img class="panel__logo" id="app-logo" alt="">
+      <p class="panel__strapline" id="app-strapline" hidden></p>
+
+      <a class="panel__enter" id="app-enter" href="/">
+        <span id="app-enter-text">Enter</span>
+      </a>
+
+      <!-- Section 9: Walter Geering as a quiet endorsement. The iQ app is the
+           primary identity; this is the master brand standing behind it. -->
+      <p class="panel__signature">Walter Geering</p>
+    </div>
+  </main>
+
+  <script src="assets/landing.js"></script>
+</body>
+</html>

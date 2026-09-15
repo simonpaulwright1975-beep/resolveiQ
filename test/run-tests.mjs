@@ -91,6 +91,48 @@ test('upsertCase() refuses a case with no company before calling out', async () 
    Reporting it as a credential problem sends whoever is setting this up
    looking in entirely the wrong place — which is exactly what happened the
    first time the live smoke test was run. */
+/* The landing page is the WG Platforms entry screen, and is meant to be copied
+   into every iQ app with only the config block changed. These guard the two
+   things that would quietly break that: the route, and the config contract. */
+test('the landing page is served at /landing and /landing.html', async () => {
+  await withApp(async (base) => {
+    for (const path of ['/landing', '/landing.html']) {
+      const res = await fetch(`${base}${path}`);
+      assert.equal(res.status, 200, `${path} must serve`);
+      assert.match(res.headers.get('content-type'), /text\/html/);
+      const html = await res.text();
+      assert.match(html, /WG_APP/, `${path} must carry the app config`);
+    }
+  });
+});
+
+test('the landing config exposes every variable the brief names', async () => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync('landing.html', 'utf8');
+
+  for (const key of ['APP_LOGO', 'APP_NAME', 'APP_STRAPLINE', 'APP_ENTRY_TEXT', 'APP_URL']) {
+    assert.match(html, new RegExp(key + '\\s*:'), `${key} must be configurable`);
+  }
+
+  const css = readFileSync('assets/landing.css', 'utf8');
+  /* Section 8 of the brief is specific about the entry button, and it is the
+     one element every app shares. */
+  assert.match(css, /\.panel__enter\b[\s\S]*?background:\s*var\(--accent\)/,
+    'the entry button must use the brand accent, not a local colour');
+  assert.match(css, /\.panel__enter:hover[\s\S]*?var\(--accent-2\)/,
+    'hover must use the brand hover token');
+
+  /* image-set() picks by type support, not by whether the file exists, so a
+     .webp that has not been added yet silently kills the artwork layer.
+     Comments are stripped first — the rule against it is itself explained in
+     one, and matching that would fail for the wrong reason. */
+  const cssRules = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(cssRules, /image-set\(/,
+    'image-set would silently drop the artwork when a listed format is absent');
+  assert.match(cssRules, /url\("landing-scene\.png"\)/,
+    'the artwork layer must be a plain url()');
+});
+
 /* The ClientiQ sign-in is a machine credential. If it reaches a customer, or
    becomes the owner of a case, two different things have gone wrong: customers
    get a mailbox nobody reads, and the record of who handled a case is a robot. */

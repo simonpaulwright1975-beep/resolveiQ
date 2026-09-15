@@ -143,7 +143,12 @@ async function readBody(req, limit = 256 * 1024) {
 }
 
 async function serveStatic(req, res, pathname) {
-  const rel = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  /* '/' is the console. '/landing' is the WG Platforms entry page — accepted
+     without the extension because it is a URL people type and share. */
+  let rel;
+  if (pathname === '/') rel = 'index.html';
+  else if (pathname === '/landing') rel = 'landing.html';
+  else rel = pathname.replace(/^\/+/, '');
   /* normalize + prefix check keeps ../ out of the served tree. */
   const target = normalize(join(root, rel));
   if (!target.startsWith(root)) {

@@ -1,0 +1,186 @@
+/* WG Platforms — iQ application landing page.
+
+   One reusable template across the suite. The illustrated environment and the
+   composition are fixed; only the logo, name, strapline and entry wording
+   change, and those come from window.WG_APP in the page itself.
+
+   Tokens come from styles.css, which is linked first. Nothing here redefines a
+   brand colour. */
+
+.landing {
+  min-height: 100dvh;
+  margin: 0;
+  display: grid;
+  grid-template-rows: 1fr;
+  place-items: center;
+  padding: 32px 24px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* ---------- the illustrated scene ----------
+
+   The artwork is a supplied asset. Until it is dropped in at the path below,
+   the layered gradient underneath stands in: the same mint ground, a warm
+   cream horizon and two soft clouds. It is deliberately plain — it should read
+   as "artwork not loaded yet", never as an attempt at the illustration. */
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(42% 30% at 22% 18%, rgba(255,255,255,.85), transparent 70%),
+    radial-gradient(38% 26% at 78% 14%, rgba(255,255,255,.75), transparent 70%),
+    radial-gradient(90% 60% at 50% 108%, #fdfaf4 10%, rgba(253,250,244,0) 70%),
+    linear-gradient(180deg, #e7f4ec 0%, var(--bg) 46%, #cfe7d9 100%);
+  background-repeat: no-repeat;
+  /* contain, not cover: the brief asks for the *complete* composition, and the
+     artwork is wider than it is tall. cover on a 16:9 screen would crop the
+     balloon off the top and the products off the bottom — the two things the
+     page is anchored on. Any remainder is the mint ground, which is correct. */
+  background-size: contain;
+  background-position: center;
+}
+
+/* A soft lift behind the panel so the card stays legible wherever it lands on
+   the artwork. Barely visible on the fallback; it earns its place once a busy
+   illustration is behind it. */
+.entry::before {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, 96vw);
+  height: 520px;
+  background: radial-gradient(closest-side, rgba(255,255,255,.72), rgba(255,255,255,0) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* The real artwork, layered over the fallback gradient.
+
+   Deliberately a single url(), not image-set(): image-set picks a candidate by
+   TYPE SUPPORT, not by whether the file exists, so listing a .webp that has not
+   been added yet silently kills the whole layer — the artwork simply never
+   appears and nothing reports why. Learned the hard way.
+
+   To use a .webp or .jpg instead, change this one line. A missing file leaves
+   the gradient underneath, which is the intended fallback. */
+.scene { background-image:
+    url("landing-scene.png"),
+    radial-gradient(42% 30% at 22% 18%, rgba(255,255,255,.85), transparent 70%),
+    radial-gradient(38% 26% at 78% 14%, rgba(255,255,255,.75), transparent 70%),
+    radial-gradient(90% 60% at 50% 108%, #fdfaf4 10%, rgba(253,250,244,0) 70%),
+    linear-gradient(180deg, #e7f4ec 0%, var(--bg) 46%, #cfe7d9 100%);
+}
+
+/* ---------- the entry panel ---------- */
+
+.entry { position: relative; z-index: 1; width: 100%; display: grid; place-items: center; }
+
+.panel {
+  width: min(100%, 430px);
+  background: #fffdf8;              /* soft ivory, per the brief */
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 2px 4px rgba(20,40,25,.05), 0 18px 48px rgba(20,40,25,.12);
+  padding: 38px 36px 26px;
+  text-align: center;
+}
+
+/* Section 6: never stretch or squash the supplied logo. Width is capped and
+   height follows the artwork's own ratio. */
+.panel__logo {
+  display: block;
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  margin: 0 auto;
+}
+
+.panel__strapline {
+  margin: 14px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.panel__enter {
+  display: block;
+  margin-top: 30px;
+  padding: 14px 22px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  text-decoration: none;
+  border-radius: 10px;              /* brief: 9-10px */
+  box-shadow: 0 1px 2px rgba(20,40,25,.10);
+  transition: background .16s ease, transform .16s ease, box-shadow .16s ease;
+  cursor: pointer;
+}
+
+.panel__enter:hover { background: var(--accent-2); box-shadow: 0 2px 8px rgba(20,40,25,.16); }
+.panel__enter:active { transform: translateY(1px); }
+.panel__enter:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 3px; }
+
+.panel__signature {
+  margin: 24px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---------- responsive ----------
+
+   Section 10 is specific: do not squash the desktop artwork on mobile. Crop
+   and reposition, and let functional content win.
+
+   Tablet keeps the full scene behind the panel, pulled up so the balloon and
+   the central products stay in view rather than sitting behind the card. */
+@media (max-width: 1023px) {
+  .scene { background-position: center 22%; }
+}
+
+/* Below 640px a background image behind the panel would put the balloon under
+   the card. So the scene stops being a backdrop and becomes a band across the
+   top: the balloon stays visible, the panel sits below it on the mint ground,
+   and nothing is scaled down to fit. */
+@media (max-width: 639px) {
+  .landing {
+    grid-template-rows: auto 1fr;
+    place-items: start stretch;
+    padding: 0 0 28px;
+    gap: 20px;
+  }
+
+  .scene {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: 32vh;
+    min-height: 190px;
+    /* The band is a crop, so cover is right here — and 'top' keeps the balloon,
+       which the brief requires stay visible on mobile. */
+    background-size: cover;
+    background-position: center top;
+  }
+
+  /* The gutter lives here rather than on .landing, so the scene can run full
+     width without a 100vw breakout widening the grid and shunting the panel
+     off the right-hand edge. */
+  .entry { padding: 0 16px; }
+  .entry::before { display: none; }
+
+  .panel { padding: 28px 22px 20px; border-radius: 16px; }
+  .panel__logo { max-width: 240px; }
+  .panel__enter { margin-top: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel__enter { transition: none; }
+}

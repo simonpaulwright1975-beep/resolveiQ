@@ -61,15 +61,73 @@ for the masthead) and `assets/logo.svg` (full lockup with strapline). The
 masthead inlines the mark directly in `index.html`, so that copy needs replacing
 too. No other change is needed.
 
-### The illustrated landing page does not exist
+### The illustrated landing page is built — the artwork is not supplied
 
-Sections 1–9 describe a watercolour landing/login page — WG balloon, illustrated
-product scene, floating entry card, "Press here to enter", Walter Geering
-signature. **None of it is built.** ResolveIQ opens straight onto the console.
-
-That is a separate piece of work and it was not part of the re-theme.
+`landing.html` is live at **`/landing`**, built as the one reusable template the
+brief asks for. See "The landing page" below.
 
 ### `--bg-deeper` is unused
 
 Defined, because it is part of the shared block, but ResolveIQ has nothing that
 calls for it yet.
+
+
+---
+
+# The landing page
+
+Served at **`/landing`** (and `/landing.html`). `/` is still the console, so
+nothing that exists today changed. To make the landing the front door, point
+your link or reverse proxy at `/landing`.
+
+## Copying it into another iQ app
+
+Copy `landing.html`, `assets/landing.css`, `assets/landing.js` and the artwork.
+Then edit **one block** — the only part that changes between apps:
+
+```js
+window.WG_APP = {
+  APP_LOGO:      'assets/logo.svg',
+  APP_NAME:      'ResolveiQ',
+  APP_STRAPLINE: null,
+  APP_ENTRY_TEXT:'Enter ResolveiQ',
+  APP_URL:       '/'
+};
+```
+
+`APP_STRAPLINE` is `null` here on purpose. The brief says not to recreate the
+strapline independently when it is already part of the supplied logo — set it
+only for an app whose logo does not carry one, or you get it twice at two sizes.
+
+## The artwork
+
+**Not supplied, so not present.** Save it as **`assets/landing-scene.png`** and
+it appears with no other change. Until then a layered gradient stands in — the
+same mint ground with a cream horizon and two soft clouds. It is deliberately
+plain: it should read as *artwork not loaded*, never as an attempt at the
+illustration.
+
+For `.webp` or `.jpg`, change the single `url()` in `assets/landing.css`.
+
+**Do not reach for `image-set()` there.** It picks a candidate by *type
+support*, not by whether the file exists, so listing a `.webp` that has not been
+added yet silently kills the entire layer — the artwork never appears and
+nothing tells you why. That cost a debugging cycle here; a test now fails if it
+comes back.
+
+## How the composition responds
+
+| | |
+|---|---|
+| Desktop | `background-size: contain`, not `cover`. The artwork is wider than it is tall, so `cover` on a 16:9 screen crops the balloon off the top and the products off the bottom — the two things the page is anchored on. Any remainder is mint ground. |
+| Tablet | Same, pulled up to 22% so the balloon and central products stay clear of the card. |
+| Mobile | The scene stops being a backdrop and becomes a band across the top, cropped to `center top` so the balloon survives. The panel sits below it on the mint ground. Nothing is scaled down to fit — that is the brief's "crop and reposition, never squash". |
+
+A soft white radial sits behind the panel on desktop and tablet so the card stays
+legible wherever it falls on the illustration.
+
+## Worth checking once the real artwork is in
+
+The card is centred, and in the reference illustration the gift-box stack is
+also centred. If the two fight, move the panel rather than the artwork — the
+illustration is the locked asset, the panel position is not.
