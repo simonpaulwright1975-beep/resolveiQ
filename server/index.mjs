@@ -80,7 +80,10 @@ async function loadQueue() {
 
     const payload = {
       team: sample.team,
-      currentAgent: config.clientiq.email || sample.currentAgent,
+      /* The advisor, not the service account. Signing in as a machine
+         credential must not make that machine the owner of every case. */
+      currentAgent:
+        config.identity.advisorEmail || config.identity.teamEmail || sample.currentAgent,
       metrics: deriveMetrics(tickets, sample.metrics),
       tickets,
       source: 'clientiq'

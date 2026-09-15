@@ -28,7 +28,7 @@ loudly if it finds one in its environment.
 npm install
 cp .env.example .env     # ClientiQ account + an Anthropic key
 npm start                # http://localhost:3000
-npm test                 # 26 tests, no credentials needed
+npm test                 # 29 tests, no credentials needed
 ```
 
 It runs with nothing configured: no ClientiQ means the sample queue, no API key
@@ -94,6 +94,25 @@ five minutes. The app says "queued", never "saved to Sage CRM", until it is. A
 failed queue does not fail the case; the case is saved and the advisor is told
 the Sage copy did not go.
 
+## Email identity
+
+ResolveIQ **sends no email**. There is no SMTP, no Graph, no mail integration
+of any kind — it drafts a reply and the advisor sends it herself. So there is
+no From address for the app to get wrong today. What there is, is identity that
+must not leak.
+
+Three addresses, deliberately separate:
+
+| | Setting | What it is |
+|---|---|---|
+| **Customer-facing** | `RESOLVEIQ_TEAM_EMAIL` | `customerservice@waltergeering.co.uk`. What customers see and reply to. Drafts sign off as the team, point replies here, and are forbidden from naming an individual or inventing a direct line. |
+| **Case owner** | `RESOLVEIQ_ADVISOR_EMAIL` | The advisor working the queue. There is no login, so it is configured. Blank falls back to the team address. |
+| **Sign-in** | `RESOLVEIQ_SUPABASE_EMAIL` | A machine credential. Generic, internal, never customer-facing, and never the owner of a case. |
+
+The third was previously presented to the browser as the current agent, which
+meant a service account would have owned every case Cerian raised. It no longer
+is, and a test fails if that ever comes back.
+
 ## Claude integration
 
 `server/suggest.mjs` calls the Messages API through the official SDK, on
@@ -147,7 +166,7 @@ App settings are namespaced `RESOLVEIQ_*` so they can't collide with an ambient
 
 ## Testing
 
-`npm test` runs 26 tests against fake ClientiQ and Anthropic servers speaking
+`npm test` runs 29 tests against fake ClientiQ and Anthropic servers speaking
 the real wire formats — the client, mapping, HTTP surface and error paths, with
 no credentials or network.
 

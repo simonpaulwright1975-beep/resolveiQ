@@ -91,6 +91,44 @@ test('upsertCase() refuses a case with no company before calling out', async () 
    Reporting it as a credential problem sends whoever is setting this up
    looking in entirely the wrong place — which is exactly what happened the
    first time the live smoke test was run. */
+/* The ClientiQ sign-in is a machine credential. If it reaches a customer, or
+   becomes the owner of a case, two different things have gone wrong: customers
+   get a mailbox nobody reads, and the record of who handled a case is a robot. */
+test('the service account never reaches a customer or owns a case', async () => {
+  const { config } = await import('../server/config.mjs');
+  const { readFileSync } = await import('node:fs');
+
+  const serviceAccount = 'resolveiq-service@example.invalid';
+  const realEmail = config.clientiq.email;
+  config.clientiq.email = serviceAccount;
+
+  try {
+    /* What the browser is told the current agent is. */
+    await withApp(async (base) => {
+      const body = await (await fetch(`${base}/api/tickets`)).json();
+      assert.notEqual(body.currentAgent, serviceAccount,
+        'the signed-in machine account must not be presented as the advisor');
+      assert.equal(body.currentAgent, config.identity.teamEmail,
+        'with no advisor configured it should fall back to the team address');
+    });
+
+    /* What Claude is told to sign off as. */
+    const prompt = readFileSync('server/suggest.mjs', 'utf8');
+    assert.match(prompt, /teamEmail/, 'the draft prompt must name the team address');
+    assert.doesNotMatch(prompt, /clientiq\.email/,
+      'the draft prompt must never reference the sign-in account');
+  } finally {
+    config.clientiq.email = realEmail;
+  }
+});
+
+test('customer-facing identity defaults to the shared mailbox, not a person', async () => {
+  const { config } = await import('../server/config.mjs');
+  assert.match(config.identity.teamEmail, /^customerservice@/,
+    'replies must go out from the customer service mailbox by default');
+  assert.ok(config.identity.teamName, 'a team name is needed for the sign-off');
+});
+
 /* The standalone artifact has no server and no sibling files. A script tag
    pointing at assets/ that survives the build ships a dead reference — which
    is how the New case button came to be present but inert in a static copy. */

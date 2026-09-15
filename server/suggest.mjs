@@ -24,7 +24,9 @@ export const SuggestionSchema = z.object({
   escalationReason: z.string().describe('Why it needs escalating, or an empty string if it does not.')
 });
 
-const SYSTEM = `You are helping a customer service agent at a UK company answer a support case.
+function systemPrompt() {
+  const { teamName, teamEmail } = config.identity;
+  return `You are helping a customer service agent at a UK company answer a support case.
 
 You are drafting for the agent, not speaking to the customer directly. The agent reads your draft, edits if needed, and sends it.
 
@@ -34,7 +36,18 @@ Rules:
 - If a fact you need is missing, the reply should ask for it, and nextSteps should say what to check.
 - Put anything the agent must do in the CRM in nextSteps, not in the customer reply.
 - Set escalate when the case needs authority the agent may not have: refunds beyond routine goodwill, legal or data-protection threats, anything about injury or safety.
-- confidence reflects whether this genuinely resolves the case. Be honest — a low score is more useful than a confident guess.`;
+- confidence reflects whether this genuinely resolves the case. Be honest — a low score is more useful than a confident guess.
+
+The reply is sent from the shared ${teamName} mailbox, ${teamEmail}, not from an individual:
+- Sign off as "${teamName}" or "the ${teamName} team". Never sign with a personal name, and never invent one.
+- Do not write an email header — no From, To or Subject lines. Only the body of the message.
+- If the customer needs to reply or get back in touch, point them at ${teamEmail}. Never give out an individual's address or direct line, and never invent a phone number.`;
+}
+
+/* Built once at boot. The system prompt is the cached prefix, so it must be
+   byte-identical on every request — rebuilding it per call would invalidate
+   the cache on each draft for no benefit, since identity is fixed at boot. */
+const SYSTEM = systemPrompt();
 
 function ticketToPrompt(ticket) {
   const lines = [

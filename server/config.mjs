@@ -48,6 +48,25 @@ export const config = {
     password: process.env.RESOLVEIQ_SUPABASE_PASSWORD || ''
   },
 
+  /* Who the team is, to customers and to itself.
+
+     These are deliberately separate from the ClientiQ sign-in above. That
+     account is a machine credential — it exists to authenticate the server and
+     should be a generic internal address. It must never be what a customer
+     sees, and it should not own cases: a case owned by the service account
+     tells you nothing about who dealt with it. */
+  identity: {
+    /* The address customers see and reply to. Anything customer-facing uses
+       this, never an individual's mailbox and never the service account. */
+    teamEmail: process.env.RESOLVEIQ_TEAM_EMAIL || 'customerservice@waltergeering.co.uk',
+    teamName: process.env.RESOLVEIQ_TEAM_NAME || 'Customer Service',
+    /* The advisor working the queue, recorded as the owner of cases they
+       raise. There is no login, so this is configured rather than derived.
+       Falls back to the team address, which is honest — the team owns it —
+       rather than to the service account, which would be misleading. */
+    advisorEmail: process.env.RESOLVEIQ_ADVISOR_EMAIL || ''
+  },
+
   claude: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
     model: process.env.RESOLVEIQ_MODEL || 'claude-opus-5',
