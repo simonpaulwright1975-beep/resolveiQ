@@ -87,6 +87,37 @@ test('upsertCase() refuses a case with no company before calling out', async () 
   assert.equal(cq.received.length, before, 'must not hit the network for an invalid case');
 });
 
+/* A 403 at sign-in is almost always a proxy or firewall, not a bad password.
+   Reporting it as a credential problem sends whoever is setting this up
+   looking in entirely the wrong place — which is exactly what happened the
+   first time the live smoke test was run. */
+test('sign-in failures name the real cause, not always the password', async () => {
+  const { config } = await import('../server/config.mjs');
+  const real = config.clientiq.url;
+
+  const cases = [
+    { status: 400, expect: /email or password is wrong/i, notExpect: /proxy|firewall/i },
+    { status: 401, expect: /email or password is wrong/i, notExpect: /proxy|firewall/i },
+    { status: 403, expect: /network policy, proxy or firewall/i, notExpect: /password is wrong/i },
+    { status: 500, expect: /server error/i, notExpect: /password is wrong/i }
+  ];
+
+  for (const { status, expect, notExpect } of cases) {
+    const broken = await fakeClientiq({ signInFails: status });
+    config.clientiq.url = broken.url;
+    try {
+      await assert.rejects(() => clientiq.company(1), (e) => {
+        assert.match(e.message, expect, `${status} should explain itself`);
+        assert.doesNotMatch(e.message, notExpect, `${status} must not misdiagnose`);
+        return true;
+      });
+    } finally {
+      config.clientiq.url = real;
+      await broken.close();
+    }
+  }
+});
+
 test('a failed sign-in is an error, not a silent empty queue', async () => {
   const broken = await fakeClientiq({ signInFails: true });
   const { config } = await import('../server/config.mjs');

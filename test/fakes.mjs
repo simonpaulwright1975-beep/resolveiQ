@@ -69,7 +69,11 @@ export function fakeClientiq({ failWith = null, queueFails = false, signInFails 
     };
 
     if (req.url.startsWith('/auth/v1/token')) {
-      if (signInFails) return json(400, { error: 'invalid_grant' });
+      /* signInFails may be `true` (a 400, bad credentials) or a status code,
+         so a test can exercise the non-credential failures too. */
+      if (signInFails) {
+        return json(signInFails === true ? 400 : signInFails, { error: 'sign_in_refused' });
+      }
       return json(200, { access_token: 'test-access-token', expires_in: 3600 });
     }
 

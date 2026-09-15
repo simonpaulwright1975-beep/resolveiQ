@@ -56,9 +56,26 @@ async function signIn() {
 
   const body = await response.text();
   if (!response.ok) {
+    /* Say what actually went wrong. A 403 here is usually not a credential
+       problem at all — it is an egress proxy or firewall refusing the
+       connection — and telling someone to check their password sends them
+       looking in the wrong place. */
+    const reason =
+      response.status === 400 || response.status === 401
+        ? 'The email or password is wrong. Check RESOLVEIQ_SUPABASE_EMAIL and _PASSWORD.'
+        : response.status === 403
+          ? 'Refused before reaching the sign-in endpoint. This is usually a ' +
+            'network policy, proxy or firewall blocking the host rather than a ' +
+            'bad password — check outbound HTTPS to the ClientiQ host first.'
+          : response.status === 422
+            ? 'The sign-in request was rejected as malformed. Check SUPABASE_URL.'
+            : response.status >= 500
+              ? 'ClientiQ returned a server error. It may be down or rate limiting.'
+              : 'Unexpected response from the sign-in endpoint.';
+
     throw new ClientiqError(
-      `Could not sign in to ClientiQ (${response.status}). Check RESOLVEIQ_SUPABASE_EMAIL and _PASSWORD.`,
-      response.status === 400 ? 401 : 502
+      `Could not sign in to ClientiQ (${response.status}). ${reason}`,
+      response.status === 400 || response.status === 401 ? 401 : 502
     );
   }
 
@@ -207,6 +224,23 @@ export async function upsertCase({ case: caseFields, event }, { signal } = {}) {
   return request('rpc/resolveiq_upsert_case', {
     method: 'POST',
     body: { payload: { case: caseFields, event: event || null } },
+    signal
+  });
+}
+
+/* Delete a case outright.
+
+   Nothing in the console calls this and nothing should: a case that was raised
+   is part of the customer's history, and the way to finish one is to resolve
+   it. It exists for scripts/smoke-live.mjs, which raises a real case against
+   the live database and has to be able to remove it again.
+
+   resolveiq_case_events is ON DELETE CASCADE, so this takes the events with
+   it and cannot strand them. */
+export async function deleteCase(id, { signal } = {}) {
+  if (!id) throw new ClientiqError('an id is required to delete a case', 400);
+  await request(`resolveiq_cases?id=eq.${encodeURIComponent(id)}`, {
+    method: 'DELETE',
     signal
   });
 }

@@ -28,7 +28,7 @@ loudly if it finds one in its environment.
 npm install
 cp .env.example .env     # ClientiQ account + an Anthropic key
 npm start                # http://localhost:3000
-npm test                 # 25 tests, no credentials needed
+npm test                 # 26 tests, no credentials needed
 ```
 
 It runs with nothing configured: no ClientiQ means the sample queue, no API key
@@ -147,15 +147,32 @@ App settings are namespaced `RESOLVEIQ_*` so they can't collide with an ambient
 
 ## Testing
 
-`npm test` runs 25 tests against fake ClientiQ and Anthropic servers speaking
+`npm test` runs 26 tests against fake ClientiQ and Anthropic servers speaking
 the real wire formats — the client, mapping, HTTP surface and error paths, with
 no credentials or network.
 
-**Not yet run against live ClientiQ or a real API key.** The RPC was smoke-tested
-directly against WG Main — case stored, company linked, Sage communication
-queued, idempotent on a second post — and the test row and its queue entry were
-deleted before the on-prem worker could pick them up. Everything else is covered
-by the fake servers.
+### The live smoke test
+
+```bash
+node scripts/smoke-live.mjs        # needs .env and outbound HTTPS to WG Main
+```
+
+This is the only thing that exercises the real path end to end: sign in to
+GoTrue, read through PostgREST, raise a case through the RPC, confirm it reaches
+the queue and the customer's timeline, then delete it again.
+
+It refuses to run if a service-role key is set, because bypassing RLS would make
+it pass for reasons that say nothing about a real session. It never resolves a
+case, so it cannot put a note on a real customer's Sage record.
+
+### What has actually been verified
+
+| | |
+|---|---|
+| Write path, as a real advisor's account | **Verified.** Case raised against J&A PELLING LTD by `authenticated` with Cerian's claims, appeared on `vw_crm_company_activity` as `source='resolveiq'`, counted in `open_cases`, appeared in the open queue, then deleted — with no Sage queue entry created, which is correct for an unresolved case. |
+| Read path, as a plain signed-in account | **Verified** by impersonation: all four `vw_crm_*` views, plus a live name search. |
+| Everything else | Covered by the fake servers. |
+| **The HTTP sign-in hop** | **Still unverified.** Needs a machine with outbound HTTPS to WG Main — run the smoke test above and it is closed. |
 
 Still to build:
 
