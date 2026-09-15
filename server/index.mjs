@@ -143,11 +143,21 @@ async function readBody(req, limit = 256 * 1024) {
 }
 
 async function serveStatic(req, res, pathname) {
-  /* '/' is the console. '/landing' is the WG Platforms entry page — accepted
-     without the extension because it is a URL people type and share. */
+  /* '/' is the WG Platforms entry page — the illustrated Walter Geering front
+     door. The console lives at '/console'. Both are accepted without an
+     extension because they are URLs people type, share and bookmark. */
+
+  /* '/console/' would resolve the page's relative asset paths against
+     '/console/', so every stylesheet and script would 404. Send it to the
+     canonical form rather than serving a page that silently loses its CSS. */
+  if (pathname === '/console/') {
+    res.writeHead(301, { Location: '/console' }).end();
+    return;
+  }
+
   let rel;
-  if (pathname === '/') rel = 'index.html';
-  else if (pathname === '/landing') rel = 'landing.html';
+  if (pathname === '/' || pathname === '/landing') rel = 'landing.html';
+  else if (pathname === '/console') rel = 'index.html';
   else rel = pathname.replace(/^\/+/, '');
   /* normalize + prefix check keeps ../ out of the served tree. */
   const target = normalize(join(root, rel));
@@ -323,6 +333,8 @@ export function createApp() {
 if (process.argv[1] && process.argv[1].endsWith('server/index.mjs')) {
   createApp().listen(config.port, () => {
     console.log(`ResolveIQ on http://localhost:${config.port}`);
+    console.log(`  entry:    /          (Walter Geering landing page)`);
+    console.log(`  console:  /console   (bookmark this to skip the landing)`);
     console.log(`  ClientiQ: ${clientiqConfigured ? config.clientiq.url : 'not configured — serving sample data'}`);
     console.log(`  Claude:   ${claudeConfigured ? config.claude.model : 'not configured — drafting disabled'}`);
   });

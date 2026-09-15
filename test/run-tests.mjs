@@ -94,7 +94,28 @@ test('upsertCase() refuses a case with no company before calling out', async () 
 /* The landing page is the WG Platforms entry screen, and is meant to be copied
    into every iQ app with only the config block changed. These guard the two
    things that would quietly break that: the route, and the config contract. */
-test('the landing page is served at /landing and /landing.html', async () => {
+test('the landing page is the front door, and the console is at /console', async () => {
+  await withApp(async (base) => {
+    /* '/' is the entry page, not the console. Getting this backwards would
+       send everyone straight past the Walter Geering front door. */
+    const rootHtml = await (await fetch(`${base}/`)).text();
+    assert.match(rootHtml, /WG_APP/, '/ must serve the landing page');
+
+    const consoleRes = await fetch(`${base}/console`);
+    assert.equal(consoleRes.status, 200);
+    const consoleHtml = await consoleRes.text();
+    assert.match(consoleHtml, /id="new-case-btn"/, '/console must serve the console');
+    assert.doesNotMatch(consoleHtml, /WG_APP/, '/console is not the landing page');
+
+    /* A trailing slash would resolve the console's relative asset paths against
+       /console/, 404-ing every stylesheet and script. */
+    const slash = await fetch(`${base}/console/`, { redirect: 'manual' });
+    assert.equal(slash.status, 301, '/console/ must redirect, not serve a broken page');
+    assert.equal(slash.headers.get('location'), '/console');
+  });
+});
+
+test('the landing page is also served at /landing and /landing.html', async () => {
   await withApp(async (base) => {
     for (const path of ['/landing', '/landing.html']) {
       const res = await fetch(`${base}${path}`);
@@ -113,6 +134,12 @@ test('the landing config exposes every variable the brief names', async () => {
   for (const key of ['APP_LOGO', 'APP_NAME', 'APP_STRAPLINE', 'APP_ENTRY_TEXT', 'APP_URL']) {
     assert.match(html, new RegExp(key + '\\s*:'), `${key} must be configurable`);
   }
+
+  /* Both the config and the markup fallback must point at the console. If
+     either still says '/', the entry button reloads the landing page and the
+     app becomes unreachable through the front door. */
+  assert.match(html, /APP_URL:\s*'\/console'/, 'APP_URL must point at the console');
+  assert.match(html, /id="app-enter" href="\/console"/, 'the no-JS href must too');
 
   const css = readFileSync('assets/landing.css', 'utf8');
   /* Section 8 of the brief is specific about the entry button, and it is the
@@ -443,7 +470,7 @@ test('unknown API routes 404 as JSON', async () => {
 
 test('static files are served and path traversal is refused', async () => {
   await withApp(async (base) => {
-    const page = await fetch(`${base}/`);
+    const page = await fetch(`${base}/console`);
     assert.equal(page.status, 200);
     assert.match(await page.text(), /ResolveIQ/);
 

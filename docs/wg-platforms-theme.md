@@ -76,9 +76,31 @@ calls for it yet.
 
 # The landing page
 
-Served at **`/landing`** (and `/landing.html`). `/` is still the console, so
-nothing that exists today changed. To make the landing the front door, point
-your link or reverse proxy at `/landing`.
+**The landing page is the front door.**
+
+| Path | Serves |
+|---|---|
+| `/` | The Walter Geering landing page |
+| `/console` | The customer care console |
+| `/console/` | 301 to `/console` |
+| `/landing`, `/landing.html` | The landing page (kept, so older links still work) |
+
+`/console/` redirects rather than serving: with a trailing slash the console's
+relative asset paths resolve against `/console/`, so every stylesheet and script
+would 404 and the page would render unstyled.
+
+**Cerian should bookmark `/console`.** She is in this app all day and does not
+need the front door every time; the landing exists for people arriving at the
+suite, and for the Walter Geering entrance the brief describes. The server prints
+both URLs on boot.
+
+### One expected 404
+
+Until the artwork is added, every load of the landing page logs
+`404 /assets/landing-scene.png`. That is correct — the file genuinely is not
+there, and the gradient fallback takes over. It disappears the moment the
+artwork is dropped in. A placeholder file would silence it while hiding the
+fact that the real asset is still missing.
 
 ## Copying it into another iQ app
 

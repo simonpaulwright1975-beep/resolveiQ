@@ -27,8 +27,8 @@ loudly if it finds one in its environment.
 ```bash
 npm install
 cp .env.example .env     # ClientiQ account + an Anthropic key
-npm start                # http://localhost:3000
-npm test                 # 29 tests, no credentials needed
+npm start                # http://localhost:3000  (console: /console)
+npm test                 # 32 tests, no credentials needed
 ```
 
 It runs with nothing configured: no ClientiQ means the sample queue, no API key
@@ -134,6 +134,20 @@ read as an empty draft. If you want the API to retry a refusal on a fallback
 model inside the same call, add the `fallbacks` parameter — see the
 [server-side fallbacks docs](https://platform.claude.com/docs/en/api/messages).
 
+## Pages
+
+| Path | What it is |
+|---|---|
+| `/` | The Walter Geering landing page — the WG Platforms front door. |
+| `/console` | The customer care console. **Bookmark this** to go straight to work. |
+
+The landing page is one reusable template shared across the iQ suite: the
+illustrated environment and composition are fixed, and only the logo, name,
+strapline and entry wording change. See `docs/wg-platforms-theme.md`.
+
+The illustration itself is a supplied asset. Drop it in at
+`assets/landing-scene.png` and it appears; until then a gradient stands in.
+
 ## Endpoints
 
 | Method | Path | Purpose |
@@ -166,7 +180,7 @@ App settings are namespaced `RESOLVEIQ_*` so they can't collide with an ambient
 
 ## Testing
 
-`npm test` runs 29 tests against fake ClientiQ and Anthropic servers speaking
+`npm test` runs 32 tests against fake ClientiQ and Anthropic servers speaking
 the real wire formats — the client, mapping, HTTP surface and error paths, with
 no credentials or network.
 
