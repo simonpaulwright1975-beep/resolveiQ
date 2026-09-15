@@ -569,7 +569,10 @@
   async function init() {
     DATA = await window.RESOLVEIQ_LOAD();
     ME = DATA.currentAgent || 'You';
-    $('team-line').textContent = DATA.team || 'Customer Care';
+    /* The team strapline was replaced by the logo, which says it already.
+       Kept tolerant so a missing element can never break the render. */
+    var teamLine = $('team-line');
+    if (teamLine) teamLine.textContent = DATA.team || 'Customer Care';
     renderSource();
     hydrate();
     renderAll();
