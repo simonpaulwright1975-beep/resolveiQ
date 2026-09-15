@@ -294,7 +294,7 @@
     try {
       var response = await fetch('/api/history?company_id=' + encodeURIComponent(ticket.companyId));
       if (!response.ok) return;
-      var body = await response.json();
+      var body = await window.RESOLVEIQ_readJson(response);
       if (Array.isArray(body.history) && body.history.length) {
         ticket.history = body.history;
         if (state.selected === ticket.id) openDrawer(ticket.id);
@@ -321,7 +321,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      var body = await response.json().catch(function () { return {}; });
+      var body = await window.RESOLVEIQ_readJson(response).catch(function () { return {}; });
       if (!response.ok) {
         return { ok: false, error: body.error || ('Could not save — HTTP ' + response.status) };
       }
@@ -381,7 +381,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticket: t })
       });
-      var body = await response.json();
+      var body = await window.RESOLVEIQ_readJson(response);
       if (!response.ok) throw new Error(body.error || ('HTTP ' + response.status));
 
       t.aiSuggestion = body.reply;

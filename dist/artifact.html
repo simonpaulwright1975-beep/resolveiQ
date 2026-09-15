@@ -944,8 +944,58 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     </div>
     <div class="drawer__body" id="drawer-body"></div>
   </aside>
-  <script type="module" src="assets/new-case.mjs"></script>
 
+<script>
+/* Reading a JSON response, with a useful message when it isn't JSON.
+
+   ResolveIQ's browser code talks only to its own Node server. If something
+   else answers — a static host serving index.html for every path, a proxy
+   login page, a tunnel error — the body is HTML, and response.json() fails
+   with "Unexpected token '<'", which tells an advisor nothing and sends
+   whoever is supporting her looking at the wrong layer.
+
+   Loaded as a plain script so both app.js and the new-case module can use it. */
+(function () {
+  'use strict';
+
+  function looksLikeHtml(text) {
+    return /^\s*(<!doctype|<html|<head|<body|<\?xml)/i.test(text || '');
+  }
+
+  /* Reads the body once, parses it, and throws something diagnosable if it is
+     not JSON. Returns the parsed object; the caller still checks response.ok. */
+  async function readJson(response) {
+    var text = await response.text();
+
+    if (!text) {
+      if (response.ok) return {};
+      throw new Error('The server returned an empty response (' + response.status + ').');
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (parseError) {
+      var type = response.headers.get('content-type') || 'none';
+
+      if (looksLikeHtml(text)) {
+        throw new Error(
+          'The server returned a web page instead of data. ResolveIQ’s ' +
+          'server is not answering /api — check it is running (npm start) ' +
+          'and that you are not viewing a static copy of the page.'
+        );
+      }
+
+      throw new Error(
+        'The server returned something that is not JSON (' + response.status +
+        ', content-type: ' + type + ').'
+      );
+    }
+  }
+
+  window.RESOLVEIQ_readJson = readJson;
+})();
+
+</script>
 <script>
 /* Sample queue data for ResolveIQ.
    Swap this file for a fetch() against your helpdesk API — the rest of the app
@@ -1249,15 +1299,22 @@ window.RESOLVEIQ_DATA = {
 window.RESOLVEIQ_LOAD = async function loadQueue() {
   try {
     const response = await fetch('/api/tickets', { headers: { Accept: 'application/json' } });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const data = await response.json();
+    const data = await window.RESOLVEIQ_readJson(response);
+    if (!response.ok) throw new Error(data.error || 'HTTP ' + response.status);
     if (!Array.isArray(data.tickets)) throw new Error('unexpected payload');
     return data;
   } catch (error) {
+    /* Falling back is right — the page should still render. But say which
+       fallback this is. "No server" and "something else answered /api" look
+       identical on screen and are fixed in completely different places. */
     console.warn('Queue API unavailable, using sample data:', error.message);
+    const servedByStatic = /web page instead of data/.test(error.message);
     return Object.assign({}, window.RESOLVEIQ_DATA, {
       source: 'sample',
-      reason: 'Sample data — start the server and connect Sage CRM to show your live queue.'
+      reason: servedByStatic
+        ? 'Sample data — /api is being answered by a static host, not ResolveIQ\u2019s ' +
+          'server. Nothing here is live: run the server (npm start) to see the real queue.'
+        : 'Sample data — start the server and connect ClientiQ to show your live queue.'
     });
   }
 };
@@ -1560,7 +1617,7 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
     try {
       var response = await fetch('/api/history?company_id=' + encodeURIComponent(ticket.companyId));
       if (!response.ok) return;
-      var body = await response.json();
+      var body = await window.RESOLVEIQ_readJson(response);
       if (Array.isArray(body.history) && body.history.length) {
         ticket.history = body.history;
         if (state.selected === ticket.id) openDrawer(ticket.id);
@@ -1587,7 +1644,7 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      var body = await response.json().catch(function () { return {}; });
+      var body = await window.RESOLVEIQ_readJson(response).catch(function () { return {}; });
       if (!response.ok) {
         return { ok: false, error: body.error || ('Could not save — HTTP ' + response.status) };
       }
@@ -1647,7 +1704,7 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ticket: t })
       });
-      var body = await response.json();
+      var body = await window.RESOLVEIQ_readJson(response);
       if (!response.ok) throw new Error(body.error || ('HTTP ' + response.status));
 
       t.aiSuggestion = body.reply;
@@ -1913,6 +1970,19 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
   } else {
     init();
   }
+})();
+
+</script>
+<script>
+
+/* Static artifact: there is no server, so a case cannot be raised. */
+(function () {
+  var btn = document.getElementById('new-case-btn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.title = 'Raising a case needs the ResolveIQ server — this is a static preview.';
+  btn.style.opacity = '0.5';
+  btn.style.cursor = 'not-allowed';
 })();
 
 </script>

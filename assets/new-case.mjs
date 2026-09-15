@@ -50,7 +50,7 @@ async function search(query) {
 
   try {
     const response = await fetch('/api/companies?q=' + encodeURIComponent(q));
-    const body = await response.json();
+    const body = await window.RESOLVEIQ_readJson(response);
     state.results = Array.isArray(body.companies) ? body.companies : [];
     state.error = response.ok ? null : (body.error || 'Search failed');
   } catch (error) {
@@ -72,7 +72,7 @@ async function pickCompany(companyId) {
 
   try {
     const response = await fetch('/api/contacts?company_id=' + encodeURIComponent(companyId));
-    const body = await response.json();
+    const body = await window.RESOLVEIQ_readJson(response);
     state.contacts = Array.isArray(body.contacts) ? body.contacts : [];
   } catch {
     state.contacts = [];   // a case can be raised without naming a person
@@ -124,7 +124,7 @@ async function submit() {
       })
     });
 
-    const body = await response.json();
+    const body = await window.RESOLVEIQ_readJson(response);
     if (!response.ok) throw new Error(body.error || 'HTTP ' + response.status);
 
     close();

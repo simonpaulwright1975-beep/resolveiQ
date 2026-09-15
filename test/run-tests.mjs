@@ -91,6 +91,23 @@ test('upsertCase() refuses a case with no company before calling out', async () 
    Reporting it as a credential problem sends whoever is setting this up
    looking in entirely the wrong place — which is exactly what happened the
    first time the live smoke test was run. */
+/* The standalone artifact has no server and no sibling files. A script tag
+   pointing at assets/ that survives the build ships a dead reference — which
+   is how the New case button came to be present but inert in a static copy. */
+test('the standalone artifact references no external files', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { readFileSync } = await import('node:fs');
+
+  execFileSync(process.execPath, ['scripts/build-artifact.mjs'], { stdio: 'pipe' });
+  const artifact = readFileSync('dist/artifact.html', 'utf8');
+
+  assert.doesNotMatch(artifact, /src="assets\//, 'no asset script or image refs may survive');
+  assert.doesNotMatch(artifact, /<script[^>]*\bsrc=/, 'the artifact must not load anything');
+  assert.match(artifact, /RESOLVEIQ_readJson/, 'the JSON helper must be inlined');
+  /* Raising a case needs a server, so the button must not look usable. */
+  assert.match(artifact, /new-case-btn[\s\S]{0,400}disabled = true/, 'New case must be disabled');
+});
+
 test('sign-in failures name the real cause, not always the password', async () => {
   const { config } = await import('../server/config.mjs');
   const real = config.clientiq.url;
