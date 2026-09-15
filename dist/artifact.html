@@ -1,79 +1,75 @@
 <title>ResolveIQ Customer Care Console</title>
 <style>
-/* ResolveIQ — customer service console
-   Visual language: warm cream ground, terracotta accent, heavy display numerals,
-   uppercase micro-labels, monospace for anything numeric. */
+/* ResolveIQ — customer service console.
+
+   The visual language is not ResolveIQ's own. It is the WG Platforms design
+   system, shared across every iQ app: "the logo tells the user which
+   application they are using; the UI tells the user they are within WG
+   Platforms." Do not give this app a palette of its own.
+
+   The token block below is pasted verbatim from BRAND.md in
+   simonpaulwright1975-beep/push, which is the master reference. Keeping it
+   verbatim means a brand update is a paste, not a rewrite. ResolveIQ's own
+   names are aliases onto it, directly underneath. */
 
 :root {
-  --bg: #FBF0EC;
-  --surface: #FFFFFF;
-  --surface-2: #FBF5F2;
-  --border: #F1E0DA;
-  --border-strong: #E3CCC3;
-  --ink: #16110F;
-  --ink-2: #4B3C37;
-  --muted: #8B7A73;
-  --accent: #C1664F;
-  --accent-ink: #A4523E;
-  --accent-soft: #F5DED6;
-  --track: #F3E7E2;
-  --good: #4F7C55;
-  --good-soft: #E3EFE4;
-  --warn: #A9762E;
-  --warn-soft: #F7E9D3;
-  --bad: #B4463A;
-  --bad-soft: #F8DFDA;
-  --shadow: 0 1px 2px rgba(60, 30, 20, .05), 0 8px 24px rgba(60, 30, 20, .05);
-  --radius: 14px;
-  --radius-sm: 9px;
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* ---- WG Platforms shared tokens — verbatim from BRAND.md v1 ---- */
+  --bg:#dbeee2;
+  --bg-soft:#c9e5d5;
+  --bg-deeper:#b3d9c1;
+  --ink:#0f1a13;
+  --ink-soft:#3a4a3f;
+  --muted:#6b7a6f;
+  --card:#ffffff;
+  --line:#dcecdf;
+  --line-2:#c0dcc7;
+  --accent:#0d5a3b;
+  --accent-2:#106b45;
+  --accent-soft:#7fe0b0;
+  --accent-bg:#eaf7ef;
+  --good:#0d5a3b;
+  --good-bg:#eaf7ef;
+  --warn:#b78100;
+  --warn-bg:#fff4dc;
+  --bad:#a83232;
+  --bad-bg:#fbe2dc;
+  --shadow:0 1px 2px rgba(20,40,25,.04), 0 8px 24px rgba(20,40,25,.06);
+  --shadow-sm:0 1px 2px rgba(20,40,25,.06);
+
+  /* ---- ResolveIQ aliases, mapped by ROLE rather than by name ----
+     BRAND.md warns that token roles are what trip people up, and two here
+     would be wrong if matched on name alone:
+
+       --accent-soft in this app was always a tinted *background* for pills
+       and selected rows, so those usages now take --accent-bg. BRAND's
+       --accent-soft is a saturated mint used for decorative fills — using it
+       as a pill background would give bright mint chips.
+
+       --track is a progress-bar groove, so it takes --bg-soft, not a line
+       colour. */
+  --surface: var(--card);
+  --surface-2: #f7fdf9;          /* BRAND.md: sidebar / table-header tint */
+  --border: var(--line);
+  --border-strong: var(--line-2);
+  --ink-2: var(--ink-soft);
+  --accent-ink: var(--accent);   /* text on an accent tint; hover uses --accent-2 */
+  --track: var(--bg-soft);
+  --good-soft: var(--good-bg);
+  --warn-soft: var(--warn-bg);
+  --bad-soft: var(--bad-bg);
+
+  /* BRAND.md: cards 12-14px, buttons 9-10px, pills 999px */
+  --radius: 13px;
+  --radius-sm: 10px;
+  --radius-pill: 999px;
+
+  /* BRAND.md: one face across the whole suite. */
+  --sans: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-}
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #17120F;
-    --surface: #201915;
-    --surface-2: #281F1A;
-    --border: #372B25;
-    --border-strong: #4B3A32;
-    --ink: #F7EFEB;
-    --ink-2: #DDCEC7;
-    --muted: #A99089;
-    --accent: #E08A6E;
-    --accent-ink: #F0A98F;
-    --accent-soft: #40281F;
-    --track: #2F2620;
-    --good: #7FB187;
-    --good-soft: #23301F;
-    --warn: #D6A45C;
-    --warn-soft: #33291A;
-    --bad: #E08276;
-    --bad-soft: #3A211D;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .28);
-  }
-}
-
-:root[data-theme="dark"] {
-  --bg: #17120F;
-  --surface: #201915;
-  --surface-2: #281F1A;
-  --border: #372B25;
-  --border-strong: #4B3A32;
-  --ink: #F7EFEB;
-  --ink-2: #DDCEC7;
-  --muted: #A99089;
-  --accent: #E08A6E;
-  --accent-ink: #F0A98F;
-  --accent-soft: #40281F;
-  --track: #2F2620;
-  --good: #7FB187;
-  --good-soft: #23301F;
-  --warn: #D6A45C;
-  --warn-soft: #33291A;
-  --bad: #E08276;
-  --bad-soft: #3A211D;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .28);
+  /* BRAND.md v1 is light-only. Declared so browsers do not auto-invert
+     form controls on a dark OS. */
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -97,14 +93,14 @@ body {
 /* ---------- shared atoms ---------- */
 
 .label {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: .09em;
+  letter-spacing: .10em;
   text-transform: uppercase;
   color: var(--muted);
 }
 
-.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
 
 .card {
   background: var(--surface);
@@ -126,7 +122,7 @@ body {
 }
 
 .pill--neutral { background: var(--surface-2); color: var(--ink-2); border-color: var(--border); }
-.pill--accent  { background: var(--accent-soft); color: var(--accent-ink); }
+.pill--accent  { background: var(--accent-bg); color: var(--accent-ink); }
 .pill--good    { background: var(--good-soft); color: var(--good); }
 .pill--warn    { background: var(--warn-soft); color: var(--warn); }
 .pill--bad     { background: var(--bad-soft); color: var(--bad); }
@@ -152,7 +148,7 @@ button.primary {
   color: #fff;
 }
 
-button.primary:hover { background: var(--accent-ink); border-color: var(--accent-ink); }
+button.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -369,7 +365,7 @@ thead th {
 tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; }
 tbody tr:last-child { border-bottom: 0; }
 tbody tr:hover { background: var(--surface-2); }
-tbody tr[aria-selected="true"] { background: var(--accent-soft); }
+tbody tr[aria-selected="true"] { background: var(--accent-bg); }
 
 tbody td { padding: 11px 10px; vertical-align: middle; }
 
@@ -461,12 +457,12 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
   border: 1px solid var(--border);
 }
 
-.msg--agent { background: var(--accent-soft); border-color: transparent; }
+.msg--agent { background: var(--accent-bg); border-color: transparent; }
 .msg__who { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 3px; }
 .msg p { margin: 0; font-size: 13px; color: var(--ink-2); }
 
 .suggestion {
-  border: 1px solid var(--accent-soft);
+  border: 1px solid var(--accent-bg);
   background: var(--surface-2);
   border-radius: var(--radius-sm);
   padding: 12px 13px;
@@ -486,7 +482,8 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
 }
 
 .history li:last-child { border-bottom: 0; padding-bottom: 0; }
-.history span { color: var(--muted); font-family: var(--mono); font-size: 11.5px; white-space: nowrap; }
+.history span { color: var(--muted); font-size: 12px; font-weight: 500;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .facts div { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px; }
@@ -592,7 +589,7 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
   margin-bottom: 7px;
   padding: 3px 9px;
   border-radius: 999px;
-  background: var(--accent-soft);
+  background: var(--accent-bg);
   color: var(--accent-ink);
   font-size: 10.5px;
   font-weight: 700;
@@ -794,7 +791,7 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
   font-weight: 500;
 }
 
-.nc-results button:hover { background: var(--accent-soft); border-color: var(--accent-soft); }
+.nc-results button:hover { background: var(--accent-bg); border-color: var(--accent-bg); }
 .nc-results strong { display: block; font-weight: 650; font-size: 13.5px; }
 .nc-results small, .nc-picked small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 1px; }
 
@@ -805,7 +802,7 @@ tbody td { padding: 11px 10px; vertical-align: middle; }
   gap: 10px;
   padding: 10px 12px;
   margin-bottom: 14px;
-  background: var(--accent-soft);
+  background: var(--accent-bg);
   border-radius: var(--radius-sm);
 }
 
