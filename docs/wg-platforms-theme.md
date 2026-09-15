@@ -123,13 +123,25 @@ only for an app whose logo does not carry one, or you get it twice at two sizes.
 
 ## The artwork
 
-**Not supplied, so not present.** Save it as **`assets/landing-scene.png`** and
-it appears with no other change. Until then a layered gradient stands in — the
-same mint ground with a cream horizon and two soft clouds. It is deliberately
-plain: it should read as *artwork not loaded*, never as an attempt at the
-illustration.
+**Supplied and in place.** Two files:
 
-For `.webp` or `.jpg`, change the single `url()` in `assets/landing.css`.
+| | |
+|---|---|
+| `assets/landing-scene.png` | The master, as supplied — 1492 × 1054, 2.0 MB. |
+| `assets/landing-scene.webp` | What is actually served — **137 KB, 93% smaller**, no visible difference on a watercolour. |
+
+2 MB on the front door is a lot for one decorative image, so the CSS points at
+the WebP. If the illustration is ever revised, replace the PNG and regenerate
+the WebP from it.
+
+The server had no MIME entry for `.webp`; without one it is served as
+`octet-stream` and browsers will not paint it as a background. Added, along with
+`.jpg`/`.jpeg`. A test now fails if the CSS names a file that is missing from
+disk or absent from the MIME map.
+
+If the file is ever removed, a layered gradient stands in — deliberately plain,
+so it reads as *artwork not loaded* rather than as an attempt at the
+illustration.
 
 **Do not reach for `image-set()` there.** It picks a candidate by *type
 support*, not by whether the file exists, so listing a `.webp` that has not been
@@ -148,8 +160,36 @@ comes back.
 A soft white radial sits behind the panel on desktop and tablet so the card stays
 legible wherever it falls on the illustration.
 
-## Worth checking once the real artwork is in
+## Where the panel sits, and why
 
-The card is centred, and in the reference illustration the gift-box stack is
-also centred. If the two fight, move the panel rather than the artwork — the
-illustration is the locked asset, the panel position is not.
+They did fight. The gift-box stack runs from mid-height down to the props along
+the bottom, so a centred card landed squarely on the boxes.
+
+The illustration is the locked asset, so the panel moved. It now sits **below**
+the scene rather than over its middle: the artwork occupies a band across the
+top and the card sits beneath it, with the card's top edge overlapping the foot
+of the scene so it still reads as floating over it rather than stacked under it.
+
+Measured rather than eyeballed — at 1440×900, 1440×760 and 834×1000 the panel's
+top edge clears the bottom of the box stack and the whole card stays inside the
+viewport.
+
+Two dials at the top of `.landing` if it needs adjusting:
+
+| | |
+|---|---|
+| `--scene-height` | How much viewport height the illustration gets. Lower it to give the panel more clear ground. |
+| `--panel-drop` | A straight nudge downward. |
+
+### The edges are feathered, and the mask has a trap in it
+
+The illustration carries its own white background, so against the mint ground
+its edges read as a pasted-in rectangle. A radial mask fades them.
+
+**The mask only works because `.scene` is sized to the artwork's aspect ratio.**
+Mask percentages resolve against the element, so the first attempt — a
+viewport-wide band — put the entire fade out in the empty margins either side of
+the picture and left its edges exactly as hard as before. The element is now
+`width: min(calc(var(--scene-height) * 1492 / 1054), 100vw)`, which is the
+artwork's own box. **If the artwork's aspect ratio changes, that ratio must
+change with it** or the feathering silently stops working.

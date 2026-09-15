@@ -145,8 +145,9 @@ The landing page is one reusable template shared across the iQ suite: the
 illustrated environment and composition are fixed, and only the logo, name,
 strapline and entry wording change. See `docs/wg-platforms-theme.md`.
 
-The illustration itself is a supplied asset. Drop it in at
-`assets/landing-scene.png` and it appears; until then a gradient stands in.
+The illustration is in place. `assets/landing-scene.png` is the master as
+supplied (2.0 MB); `assets/landing-scene.webp` is what gets served (137 KB) —
+regenerate it from the PNG if the artwork is ever revised.
 
 ## Endpoints
 

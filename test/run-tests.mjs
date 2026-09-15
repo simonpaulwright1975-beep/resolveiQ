@@ -156,8 +156,20 @@ test('the landing config exposes every variable the brief names', async () => {
   const cssRules = css.replace(/\/\*[\s\S]*?\*\//g, '');
   assert.doesNotMatch(cssRules, /image-set\(/,
     'image-set would silently drop the artwork when a listed format is absent');
-  assert.match(cssRules, /url\("landing-scene\.png"\)/,
-    'the artwork layer must be a plain url()');
+  assert.match(cssRules, /url\("landing-scene\.(webp|png|jpe?g)"\)/,
+    'the artwork layer must be a plain url() naming one file');
+
+  /* Whatever format the CSS asks for has to actually be on disk, or the front
+     door silently falls back to the gradient and looks unfinished. */
+  const { existsSync } = await import('node:fs');
+  const named = cssRules.match(/url\("(landing-scene\.[a-z0-9]+)"\)/)[1];
+  assert.ok(existsSync(`assets/${named}`), `assets/${named} is referenced but missing`);
+
+  /* And the server must know its media type — an unknown extension is served
+     as octet-stream, which browsers will not paint as a background. */
+  const server = readFileSync('server/index.mjs', 'utf8');
+  const ext = named.slice(named.lastIndexOf('.'));
+  assert.match(server, new RegExp(`'\\${ext}':`), `${ext} must be in the MIME map`);
 });
 
 /* The ClientiQ sign-in is a machine credential. If it reaches a customer, or

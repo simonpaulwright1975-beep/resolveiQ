@@ -8,12 +8,29 @@
    brand colour. */
 
 .landing {
+  /* ---- the two dials worth tuning ----
+
+     --scene-height  how much of the viewport height the illustration gets.
+                     Lower it to give the panel more clear ground.
+     --panel-drop    a nudge downward if the card still clips the artwork.
+
+     The card sits BELOW the centre of the illustration rather than dead on it.
+     The reference artwork has the gift-box stack running from mid-height down
+     to the props along the bottom, so a centred card lands squarely on the
+     boxes. Dropping the illustration into the upper band and the card beneath
+     keeps the balloon and the boxes clear, while the card's top edge still
+     overlaps the foot of the scene so it reads as floating over it rather than
+     stacked under it. */
+  --scene-height: 66vh;
+  --panel-drop: 0px;
+
   min-height: 100dvh;
   margin: 0;
   display: grid;
   grid-template-rows: 1fr;
-  place-items: center;
-  padding: 32px 24px;
+  align-items: end;
+  justify-items: center;
+  padding: 24px 24px 7vh;
   position: relative;
   overflow-x: hidden;
 }
@@ -26,7 +43,19 @@
    as "artwork not loaded yet", never as an attempt at the illustration. */
 .scene {
   position: fixed;
-  inset: 0;
+  /* A band across the top rather than the whole viewport, so the lower ground
+     stays clear for the panel.
+
+     The element is sized to the ARTWORK's own aspect ratio rather than spanning
+     the viewport. That matters for the mask below: percentages resolve against
+     the element, so a viewport-wide box would put the fade out in the empty
+     margins and leave the picture's edges as hard as ever — which is exactly
+     what happened first time. */
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: var(--scene-height);
+  width: min(calc(var(--scene-height) * 1492 / 1054), 100vw);
   z-index: 0;
   background-color: var(--bg);
   background-image:
@@ -40,7 +69,14 @@
      balloon off the top and the products off the bottom — the two things the
      page is anchored on. Any remainder is the mint ground, which is correct. */
   background-size: contain;
-  background-position: center;
+  background-position: center top;
+
+  /* The illustration carries its own white background, so against the mint
+     ground its edges read as a pasted-in rectangle. Feathering them makes the
+     scene sit in the page instead of on top of it. The fallback gradient fades
+     with it, which is harmless — what shows through is the same mint. */
+  -webkit-mask-image: radial-gradient(74% 80% at 50% 42%, #000 62%, transparent 100%);
+  mask-image: radial-gradient(74% 80% at 50% 42%, #000 62%, transparent 100%);
 }
 
 /* A soft lift behind the panel so the card stays legible wherever it lands on
@@ -51,8 +87,8 @@
   position: absolute;
   inset: 50% auto auto 50%;
   transform: translate(-50%, -50%);
-  width: min(760px, 96vw);
-  height: 520px;
+  width: min(680px, 96vw);
+  height: 420px;
   background: radial-gradient(closest-side, rgba(255,255,255,.72), rgba(255,255,255,0) 100%);
   pointer-events: none;
   z-index: -1;
@@ -65,10 +101,13 @@
    been added yet silently kills the whole layer — the artwork simply never
    appears and nothing reports why. Learned the hard way.
 
-   To use a .webp or .jpg instead, change this one line. A missing file leaves
-   the gradient underneath, which is the intended fallback. */
+   Served as .webp: the supplied PNG is 2.0 MB, which is a lot to put on the
+   front door, and the same watercolour as WebP is 137 KB — 93% smaller with no
+   visible difference. landing-scene.png stays in the repo as the master; regenerate
+   the .webp from it if the artwork is ever revised. A missing file leaves the
+   gradient underneath, which is the intended fallback. */
 .scene { background-image:
-    url("landing-scene.png"),
+    url("landing-scene.webp"),
     radial-gradient(42% 30% at 22% 18%, rgba(255,255,255,.85), transparent 70%),
     radial-gradient(38% 26% at 78% 14%, rgba(255,255,255,.75), transparent 70%),
     radial-gradient(90% 60% at 50% 108%, #fdfaf4 10%, rgba(253,250,244,0) 70%),
@@ -77,7 +116,14 @@
 
 /* ---------- the entry panel ---------- */
 
-.entry { position: relative; z-index: 1; width: 100%; display: grid; place-items: center; }
+.entry {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  transform: translateY(var(--panel-drop));
+}
 
 .panel {
   width: min(100%, 430px);
@@ -143,7 +189,13 @@
    Tablet keeps the full scene behind the panel, pulled up so the balloon and
    the central products stay in view rather than sitting behind the card. */
 @media (max-width: 1023px) {
-  .scene { background-position: center 22%; }
+  .landing { --scene-height: 58vh; }
+}
+
+/* A short window squeezes the two together; give the artwork less and the card
+   keeps its clear ground rather than riding up over the boxes. */
+@media (max-height: 760px) {
+  .landing { --scene-height: 58vh; padding-bottom: 5vh; }
 }
 
 /* Below 640px a background image behind the panel would put the balloon under
@@ -160,7 +212,9 @@
 
   .scene {
     position: relative;
-    inset: auto;
+    top: auto;
+    left: auto;
+    transform: none;
     width: 100%;
     height: 32vh;
     min-height: 190px;
@@ -172,8 +226,11 @@
 
   /* The gutter lives here rather than on .landing, so the scene can run full
      width without a 100vw breakout widening the grid and shunting the panel
-     off the right-hand edge. */
-  .entry { padding: 0 16px; }
+     off the right-hand edge.
+
+     Centred in what is left below the band, rather than pinned under it — hard
+     against the artwork leaves half a phone screen of empty ground beneath. */
+  .entry { padding: 0 16px; align-self: center; }
   .entry::before { display: none; }
 
   .panel { padding: 28px 22px 20px; border-radius: 16px; }
