@@ -26,10 +26,33 @@ were changed **out of band** from this repo:
 deploy silently drops ResolveIQ off the feed and blanks the open-case count —
 and nobody notices until a rep asks where the care cases went.
 
-The list view's 58 existing columns are preserved by reading the live
-definition and wrapping it, rather than retyping them. Verified: columns 1–58
-unchanged and in order, `open_cases` appended at 59, and a name search measured
-53.0 ms before against 48.7 ms after.
+### This has already happened once
+
+**15 Sep 2026: `open_cases` was gone.** ClientiQ redeployed
+`vw_crm_company_list` — adding spend, margin, product-line and VIP columns —
+and the appended column went with it. Re-applied the same day; the view now has
+60 columns, ClientiQ's 59 plus `open_cases`.
+
+The activity-feed branch, the Realtime publication and the `dialpad_calls`
+policy all survived. So this is not hypothetical and it is not uniform: assume
+any out-of-band change is lost on the owning app's next deploy.
+
+ResolveIQ itself did not break, because its company search does not select
+`open_cases`. The `calliq-raise-a-case-spec.md` example does, and would have
+started returning a PostgREST 400 with no obvious cause.
+
+The list view's existing columns are preserved by reading the live definition
+and wrapping it, rather than retyping them — which is why the re-apply picked
+up ClientiQ's new columns rather than reverting them.
+
+**`reloptions` are carried through, and this matters.**
+`vw_crm_company_list` is `security_invoker=true`. A bare
+`create or replace view` **resets reloptions to empty**, which would silently
+turn it into a security-*definer* view — running as `postgres` and bypassing
+RLS for every app that reads it. The first version of `0002` had exactly that
+defect. The migration now reads the options from `pg_class`, re-applies them,
+and raises an exception if `security_invoker` is not there afterwards rather
+than trusting that it survived.
 
 The existing branches are reproduced exactly. Verified before and after:
 `sage_crm` 34,338 rows and `calliq` 2,004 rows, unchanged.
@@ -83,6 +106,30 @@ the app says "queued", never "saved to Sage CRM", until it actually is.
 
 A failed queue does **not** fail the case: the case is saved and the caller is
 told the Sage copy did not go, because losing the case would be worse.
+
+### Running without the Sage copy, and catching up later
+
+The Sage push is already decoupled: the case is written first and the queue is
+best-effort, so **ResolveIQ works fully with the on-prem worker switched off,
+unreachable, or Sage CRM retired entirely**. The only visible difference is a
+warning on resolve saying the Sage copy did not go.
+
+Nothing is lost by running that way, because the case row holds everything a
+Sage communication needs: `company_id`, `person_id`, `subject`, `note`,
+`resolution`, `channel`, `owner_email`, `opened_at` and `closed_at`.
+`sage_queue_id` is null exactly when the copy never went, so the backlog
+identifies itself:
+
+```sql
+select case_ref, company_id, person_id, subject, resolution, closed_at
+from public.resolveiq_cases
+where status = 'resolved' and sage_queue_id is null
+order by closed_at;
+```
+
+Replaying those through `crm_queue_change` later is a loop over that query.
+`resolveiq_upsert_case` sets `sage_queue_id` when it queues, so a replay is
+idempotent per case and cannot double-post.
 
 ## Credentials
 
