@@ -349,6 +349,92 @@ button.primary:hover { background: var(--accent-2); border-color: var(--accent-2
   color: #fff;
 }
 
+/* ---------- tabs ---------- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.tab {
+  padding: 9px 15px;
+  font-size: 13.5px;
+  font-weight: 650;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.tab:hover { background: var(--surface-2); }
+
+.tab[aria-selected="true"] {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- the KPI guide ---------- */
+
+.kpi-guide { max-width: 760px; }
+
+.kpi-guide__intro {
+  margin: 0 0 4px;
+  font-size: 14.5px;
+  color: var(--ink-2);
+}
+
+.kpi-guide__item {
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+}
+
+.kpi-guide__item h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+
+.kpi-guide__item p { margin: 0 0 8px; font-size: 14px; }
+.kpi-guide__item p:last-child { margin-bottom: 0; }
+
+.kpi-guide__what { color: var(--ink-2); }
+
+.kpi-guide__note {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.kpi-guide__sla {
+  margin: 8px 0 12px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kpi-guide__sla li {
+  padding: 5px 11px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.kpi-guide__footer {
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
 .table-scroll { overflow-x: auto; }
 
 table { width: 100%; border-collapse: collapse; min-width: 720px; }
@@ -891,7 +977,14 @@ button:disabled { opacity: .5; cursor: not-allowed; }
       </section>
     </div>
 
-    <section class="card panel" aria-labelledby="queue-h">
+    <div class="tabs" role="tablist" aria-label="Main views">
+      <button class="tab" id="tab-queue" role="tab" aria-selected="true"
+              aria-controls="view-queue">Live queue</button>
+      <button class="tab" id="tab-kpis" role="tab" aria-selected="false"
+              aria-controls="view-kpis">What the numbers mean</button>
+    </div>
+
+    <section class="card panel" id="view-queue" role="tabpanel" aria-labelledby="tab-queue">
       <div class="panel__head">
         <span class="label" id="queue-h">Live queue</span>
         <span class="label" id="queue-count"></span>
@@ -921,6 +1014,87 @@ button:disabled { opacity: .5; cursor: not-allowed; }
         </table>
       </div>
       <p class="empty" id="empty" hidden>Nothing matches that filter.</p>
+    </section>
+
+    <section class="card panel kpi-guide" id="view-kpis" role="tabpanel"
+             aria-labelledby="tab-kpis" hidden>
+      <div class="panel__head">
+        <span class="label">What the numbers mean</span>
+      </div>
+
+      <p class="kpi-guide__intro">
+        Every figure on this screen is counted from the cases you close. None of
+        them are targets set by a machine, and none of them are guesses — if a
+        number cannot be worked out honestly it shows a dash rather than a zero.
+      </p>
+
+      <div class="kpi-guide__item">
+        <h3>Open tickets</h3>
+        <p class="kpi-guide__what">Cases that are not resolved yet — new, open and pending together.</p>
+        <p><strong>How to meet it:</strong> this one is meant to go down through the
+          day, not to be zero. The number underneath it, <em>need attention</em>, is
+          the one worth watching: those are cases that have breached their window or
+          are about to.</p>
+      </div>
+
+      <div class="kpi-guide__item">
+        <h3>Resolved today</h3>
+        <p class="kpi-guide__what">Cases you closed since midnight, compared with the same count yesterday.</p>
+        <p><strong>How to meet it:</strong> resolve a case when it is genuinely
+          finished, not to move the count. Reopening is free and costs nothing but
+          a click — closing something that comes straight back costs the customer
+          another wait.</p>
+        <p class="kpi-guide__note">"Today" is a UK day, so a case you finish at
+          half past eleven at night still counts against that day and not the next.</p>
+      </div>
+
+      <div class="kpi-guide__item">
+        <h3>AI-assisted</h3>
+        <p class="kpi-guide__what">The share of today's resolved cases where you used
+          the drafted reply.</p>
+        <p><strong>How to meet it:</strong> you don't. This one is not a target and
+          there is no right number. It is here to show whether the drafting is
+          actually earning its place. If it stays low, the drafts are not good enough
+          — that is worth saying, and it is a problem with the app, not with you.</p>
+        <p class="kpi-guide__note">Nothing is resolved automatically. Every case on
+          this screen is closed by a person.</p>
+      </div>
+
+      <div class="kpi-guide__item">
+        <h3>Average handling time</h3>
+        <p class="kpi-guide__what">Mean minutes from a case being raised to you
+          resolving it, across everything you closed today.</p>
+        <p><strong>How to meet it:</strong> don't chase it. A long average usually
+          means cases sat waiting, not that anyone worked slowly — and a case that
+          needs a supplier to come back will always be long. Raising the case as soon
+          as the call ends does more for this figure than working faster does.</p>
+      </div>
+
+      <div class="kpi-guide__item">
+        <h3>CSAT</h3>
+        <p class="kpi-guide__what">Customer satisfaction. <strong>There is nothing
+          behind this yet</strong>, so it shows a dash.</p>
+        <p><strong>How to meet it:</strong> nothing to do. The database has a place to
+          store a score, but nobody is asking customers for one, so there is no figure
+          to show. It will fill in on its own if that is ever set up.</p>
+      </div>
+
+      <div class="kpi-guide__item">
+        <h3>SLA compliance</h3>
+        <p class="kpi-guide__what">The share of open cases still inside their time
+          window. Each case gets a window from its priority:</p>
+        <ul class="kpi-guide__sla" id="sla-windows"></ul>
+        <p><strong>How to meet it:</strong> work the top of the queue. It is already
+          sorted by urgency — breached first, then at risk, then longest waiting — so
+          the case that needs you most is always the one at the top. If something
+          cannot be finished inside its window, moving it to pending is honest;
+          leaving it open and silent is what breaches look like.</p>
+      </div>
+
+      <p class="kpi-guide__footer">
+        If a figure here looks wrong, it probably is — say so rather than working
+        around it. A number nobody trusts is worse than no number at all.
+      </p>
     </section>
 
     <p class="footnote" id="footnote">Loading queue…</p>
@@ -1021,8 +1195,8 @@ window.RESOLVEIQ_DATA = {
   metrics: {
     resolvedToday: 218,
     resolvedYesterday: 194,
-    autoResolvedPct: 71,
-    autoResolvedPrevPct: 64,
+    aiAssistedPct: 71,
+    aiAssistedPrevPct: 64,
     avgHandleMins: 6.4,
     prevHandleMins: 9.4,
     csat: 4.6,
@@ -1463,10 +1637,12 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
         tone: delta(m.resolvedToday, m.resolvedYesterday, '', true).tone
       },
       {
-        label: 'Auto-resolved',
-        value: show(m.autoResolvedPct, '%'),
-        delta: delta(m.autoResolvedPct, m.autoResolvedPrevPct, 'pts', true).text,
-        tone: delta(m.autoResolvedPct, m.autoResolvedPrevPct, 'pts', true).tone
+        /* Not "auto-resolved": nothing resolves itself here. This is the share
+           of today's resolved cases where the drafted reply was used. */
+        label: 'AI-assisted',
+        value: show(m.aiAssistedPct, '%'),
+        delta: delta(m.aiAssistedPct, m.aiAssistedPrevPct, 'pts', true).text,
+        tone: delta(m.aiAssistedPct, m.aiAssistedPrevPct, 'pts', true).tone
       },
       {
         label: 'Avg handling time',
@@ -1893,12 +2069,51 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
       : 'Live from ClientiQ. Resolving a case also queues a Sage CRM note, applied within about five minutes.';
   }
 
+  /* The SLA windows are read from the server rather than written into the
+     guide, so changing SLA_POLICY cannot leave the explanation describing
+     windows the app no longer uses. */
+  function renderSlaWindows() {
+    var list = $('sla-windows');
+    if (!list) return;
+    var policy = (DATA.metrics && DATA.metrics.slaPolicy) || {};
+    var order = ['High', 'Medium', 'Low'];
+    var entries = order
+      .filter(function (k) { return typeof policy[k] === 'number'; })
+      .map(function (k) { return { name: k, mins: policy[k] }; });
+
+    if (!entries.length) {
+      list.innerHTML = '<li>Windows are set on the server.</li>';
+      return;
+    }
+
+    list.innerHTML = entries.map(function (e) {
+      var label = e.mins >= 60 && e.mins % 60 === 0
+        ? (e.mins / 60) + (e.mins === 60 ? ' hour' : ' hours')
+        : e.mins + ' minutes';
+      return '<li>' + esc(e.name) + ' \u2014 ' + esc(label) + '</li>';
+    }).join('');
+  }
+
+  /* Tabs. The queue stays in the DOM when hidden so the tour, which anchors to
+     elements inside it, is unaffected by which tab is showing. */
+  function showTab(which) {
+    var pairs = [['tab-queue', 'view-queue'], ['tab-kpis', 'view-kpis']];
+    pairs.forEach(function (pair) {
+      var on = pair[0] === which;
+      var tab = $(pair[0]);
+      var view = $(pair[1]);
+      if (tab) tab.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (view) view.hidden = !on;
+    });
+  }
+
   function renderAll() {
     renderKpis();
     renderBars();
     renderGauge();
     renderChips();
     renderRows();
+    renderSlaWindows();
   }
 
   async function init() {
@@ -1911,6 +2126,11 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
     renderSource();
     hydrate();
     renderAll();
+
+    document.querySelector('.tabs').addEventListener('click', function (e) {
+      var tab = e.target.closest('.tab');
+      if (tab) showTab(tab.id);
+    });
 
     $('search').addEventListener('input', function (e) {
       state.query = e.target.value;

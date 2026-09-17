@@ -212,6 +212,21 @@ export async function openCases({ signal } = {}) {
   )) ?? [];
 }
 
+/* Cases closed since a given instant, for the KPI row.
+
+   openCases() deliberately excludes resolved cases, so the figures that are
+   about finished work need their own read. The select is narrow — these rows
+   are counted and averaged, never rendered — and the window is a couple of
+   days, not all history. */
+export async function resolvedSince(sinceIso, { signal } = {}) {
+  return (await request(
+    `resolveiq_cases?status=eq.resolved&closed_at=gte.${encodeURIComponent(sinceIso)}` +
+      `&select=case_ref,opened_at,closed_at,first_response_at,sla_minutes,priority,satisfaction_score` +
+      `&order=closed_at.desc&limit=2000`,
+    { signal }
+  )) ?? [];
+}
+
 export async function upsertCase({ case: caseFields, event }, { signal } = {}) {
   if (!caseFields?.company_id) {
     throw new ClientiqError(

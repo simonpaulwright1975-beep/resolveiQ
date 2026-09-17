@@ -28,7 +28,7 @@ loudly if it finds one in its environment.
 npm install
 cp .env.example .env     # ClientiQ account + an Anthropic key
 npm start                # http://localhost:3000  (console: /console)
-npm test                 # 32 tests, no credentials needed
+npm test                 # 37 tests, no credentials needed
 ```
 
 It runs with nothing configured: no ClientiQ means the sample queue, no API key
@@ -37,14 +37,44 @@ at — `CLIENTIQ · LIVE`, `CLIENTIQ · STALE`, or `SAMPLE DATA`.
 
 ## What's on the screen
 
-- **KPI row** — open tickets and the SLA dial are real. Resolved today, average
-  handling time, auto-resolved and CSAT show `—` until something supplies them.
+- **KPI row** — computed from `resolveiq_cases`: open tickets, resolved today
+  (against yesterday), AI-assisted, average handling time, and the SLA dial.
+  CSAT shows `—` because nothing collects a score yet.
+- **What the numbers mean** — a tab explaining each figure, how it is worked out
+  and what to do about it, written for the advisor rather than for a manager.
 - **Open tickets by intent**, and an **SLA compliance dial**.
 - **Live queue** — most urgent first: breached, then at risk, then longest
   waiting. Filter by status, search by customer, subject or reference.
 - **Ticket drawer** — the case, **previous contact from the customer's real
   activity feed**, and a drafted resolution with a confidence score and an
   escalation flag.
+
+## The KPI row
+
+Every figure is counted from `resolveiq_cases`, and anything without a source
+stays blank rather than reading zero — a dash is honest, an invented number gets
+acted on.
+
+| Figure | Where it comes from |
+|---|---|
+| Open tickets | Cases not resolved. |
+| Resolved today | Closed since **London** midnight, against the same count yesterday. |
+| AI-assisted | Share of today's resolved cases carrying an `ai_confidence`, i.e. where the drafted reply was used. |
+| Avg handling time | Mean minutes from `opened_at` to `closed_at` across today's resolved cases. |
+| CSAT | `satisfaction_score`. Nothing writes to it yet, so this shows `—`. |
+| SLA compliance | Open cases still inside the window their priority gives them. |
+
+**"Today" is a UK day, not a UTC one.** Through British Summer Time a UTC
+boundary puts an hour of every evening into tomorrow's figures, so a case closed
+at 11:30pm in July would land on the wrong day. The boundary is computed in
+`Europe/London`, and a test pins it.
+
+**Nothing is auto-resolved.** The card that used to say so had no source behind
+it — every case is closed by a person. It now reports whether the AI draft was
+used, which is a real, recorded thing.
+
+If the KPI read fails, the queue is still served. Losing the figures must not
+cost the advisor her work.
 
 ## Raising a case
 
@@ -154,7 +184,7 @@ regenerate it from the PNG if the artwork is ever revised.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/health` | What's configured and whether ClientiQ answers. |
-| `GET` | `/api/tickets` | The queue. Cached briefly; serves the last good result if ClientiQ is unreachable. |
+| `GET` | `/api/tickets` | The queue, the KPI figures and the SLA windows. Cached briefly; serves the last good result if ClientiQ is unreachable. |
 | `GET` | `/api/history?company_id=` | Previous contact for one company. |
 | `GET` | `/api/companies?q=` | Company search, for attaching a case. |
 | `GET` | `/api/contacts?company_id=` | People at a company, for the contact picker. |
@@ -181,7 +211,7 @@ App settings are namespaced `RESOLVEIQ_*` so they can't collide with an ambient
 
 ## Testing
 
-`npm test` runs 32 tests against fake ClientiQ and Anthropic servers speaking
+`npm test` runs 37 tests against fake ClientiQ and Anthropic servers speaking
 the real wire formats — the client, mapping, HTTP surface and error paths, with
 no credentials or network.
 

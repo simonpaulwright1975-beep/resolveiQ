@@ -55,14 +55,31 @@ async function loadQueue() {
   const sample = await sampleTickets();
 
   if (!clientiqConfigured) {
-    return { ...sample, source: 'sample', reason: 'ClientiQ is not configured' };
+    /* The SLA windows are server configuration, not data, so they apply just as
+       much to the sample queue — and the KPI guide reads them from here. */
+    return {
+      ...sample,
+      metrics: { ...sample.metrics, slaPolicy: config.slaPolicy },
+      source: 'sample',
+      reason: 'ClientiQ is not configured'
+    };
   }
 
   const fresh = Date.now() - queueCache.at < config.cacheSeconds * 1000;
   if (fresh && queueCache.payload) return queueCache.payload;
 
   try {
-    const rows = await clientiq.openCases();
+    /* Both reads in parallel: the open queue, and the cases finished since
+       yesterday morning that the KPI row is computed from. */
+    const [rows, resolved] = await Promise.all([
+      clientiq.openCases(),
+      clientiq.resolvedSince(londonMidnight(1).toISOString()).catch((error) => {
+        /* A KPI row that cannot be computed must not cost the advisor her
+           queue. Fall back to no figures rather than no work. */
+        console.error('KPI read failed:', error.message);
+        return [];
+      })
+    ]);
 
     /* One company lookup per distinct company, not per case. */
     const companyIds = [...new Set(rows.map((r) => r.company_id))];
@@ -87,7 +104,7 @@ async function loadQueue() {
          credential must not make that machine the owner of every case. */
       currentAgent:
         config.identity.advisorEmail || config.identity.teamEmail || sample.currentAgent,
-      metrics: deriveMetrics(tickets, sample.metrics),
+      metrics: deriveMetrics(tickets, sample.metrics, resolved),
       tickets,
       source: 'clientiq'
     };
@@ -98,23 +115,110 @@ async function loadQueue() {
     if (queueCache.payload) {
       return { ...queueCache.payload, source: 'clientiq-stale', reason: error.message };
     }
-    return { ...sample, source: 'sample', reason: `ClientiQ unreachable — ${error.message}` };
+    return {
+      ...sample,
+      metrics: { ...sample.metrics, slaPolicy: config.slaPolicy },
+      source: 'sample',
+      reason: `ClientiQ unreachable — ${error.message}`
+    };
   }
 }
 
-/* Only report what can actually be answered. */
-function deriveMetrics(tickets, base) {
+/* ---------- the working day ----------
+
+   "Today" is a UK working day, not a UTC one. Through British Summer Time a
+   UTC day boundary puts an hour of every evening into tomorrow's figures, so
+   a case Cerian closes at 11:30pm in July would count against the wrong day. */
+function londonOffsetMinutes(at) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+  }).formatToParts(at);
+  const get = (type) => Number(parts.find((p) => p.type === type).value);
+  const asIfUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'));
+  return (asIfUtc - at.getTime()) / 60000;
+}
+
+export function londonMidnight(daysAgo = 0, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(now);
+  const get = (type) => Number(parts.find((p) => p.type === type).value);
+  const localMidnight = new Date(Date.UTC(get('year'), get('month') - 1, get('day') - daysAgo));
+  return new Date(localMidnight.getTime() - londonOffsetMinutes(localMidnight) * 60000);
+}
+
+const mean = (values) =>
+  values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+
+/* Minutes a case was open. Both ends come from the database, so a clock skew
+   on this machine cannot distort it. */
+function handleMinutes(row) {
+  const opened = new Date(row.opened_at).getTime();
+  const closed = new Date(row.closed_at).getTime();
+  if (!Number.isFinite(opened) || !Number.isFinite(closed) || closed < opened) return null;
+  return (closed - opened) / 60000;
+}
+
+/* Only report what can actually be answered.
+
+   Every figure here is computed from resolveiq_cases. Anything with no source
+   stays null and the console shows an em dash — a blank is honest, an invented
+   number gets acted on. */
+export function deriveMetrics(tickets, base, resolved = []) {
   const open = tickets.filter((t) => t.status !== 'resolved');
+
+  const todayStart = londonMidnight(0);
+  const yesterdayStart = londonMidnight(1);
+
+  const inWindow = (row, from, to) => {
+    const t = new Date(row.closed_at).getTime();
+    return Number.isFinite(t) && t >= from.getTime() && (!to || t < to.getTime());
+  };
+
+  const today = resolved.filter((r) => inWindow(r, todayStart, null));
+  const yesterday = resolved.filter((r) => inWindow(r, yesterdayStart, todayStart));
+
+  /* Nothing is auto-resolved — Cerian resolves every case. What is real is
+     whether she used the drafted reply, which is recorded as ai_confidence. */
+  const assistedPct = (rows) =>
+    rows.length
+      ? Math.round((rows.filter((r) => r.ai_confidence != null).length / rows.length) * 100)
+      : null;
+
+  const handling = (rows) => {
+    const mins = rows.map(handleMinutes).filter((m) => m != null);
+    return mins.length ? Math.round(mean(mins)) : null;
+  };
+
+  /* satisfaction_score has a column but nothing writes to it yet, so this is
+     null in practice. Left wired up so it lights up the day something does. */
+  const csatOf = (rows) => {
+    const scores = rows.map((r) => r.satisfaction_score).filter((v) => typeof v === 'number');
+    return scores.length ? Math.round(mean(scores) * 10) / 10 : null;
+  };
+
+  /* Of the cases finished today, how many beat their SLA window. */
+  const withinSla = today.filter((r) => {
+    const mins = handleMinutes(r);
+    const allowed = r.sla_minutes ?? config.slaPolicy[r.priority] ?? config.slaPolicy.Default;
+    return mins != null && allowed != null && mins <= allowed;
+  }).length;
+
   return {
-    resolvedToday: null,
-    resolvedYesterday: null,
-    autoResolvedPct: null,
-    autoResolvedPrevPct: null,
-    avgHandleMins: null,
-    prevHandleMins: null,
-    csat: null,
-    prevCsat: null,
+    resolvedToday: today.length,
+    resolvedYesterday: yesterday.length,
+    aiAssistedPct: assistedPct(today),
+    aiAssistedPrevPct: assistedPct(yesterday),
+    avgHandleMins: handling(today),
+    prevHandleMins: handling(yesterday),
+    csat: csatOf(today),
+    prevCsat: csatOf(yesterday),
     slaTargetPct: base?.slaTargetPct ?? 95,
+    /* Sent so the KPI guide can state the real windows rather than repeating
+       numbers in prose that quietly go stale when SLA_POLICY changes. */
+    slaPolicy: config.slaPolicy,
+    resolvedWithinSlaToday: today.length ? Math.round((withinSla / today.length) * 100) : null,
     openCount: open.length
   };
 }

@@ -10,8 +10,8 @@ window.RESOLVEIQ_DATA = {
   metrics: {
     resolvedToday: 218,
     resolvedYesterday: 194,
-    autoResolvedPct: 71,
-    autoResolvedPrevPct: 64,
+    aiAssistedPct: 71,
+    aiAssistedPrevPct: 64,
     avgHandleMins: 6.4,
     prevHandleMins: 9.4,
     csat: 4.6,

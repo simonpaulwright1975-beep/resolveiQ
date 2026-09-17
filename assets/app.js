@@ -128,10 +128,12 @@
         tone: delta(m.resolvedToday, m.resolvedYesterday, '', true).tone
       },
       {
-        label: 'Auto-resolved',
-        value: show(m.autoResolvedPct, '%'),
-        delta: delta(m.autoResolvedPct, m.autoResolvedPrevPct, 'pts', true).text,
-        tone: delta(m.autoResolvedPct, m.autoResolvedPrevPct, 'pts', true).tone
+        /* Not "auto-resolved": nothing resolves itself here. This is the share
+           of today's resolved cases where the drafted reply was used. */
+        label: 'AI-assisted',
+        value: show(m.aiAssistedPct, '%'),
+        delta: delta(m.aiAssistedPct, m.aiAssistedPrevPct, 'pts', true).text,
+        tone: delta(m.aiAssistedPct, m.aiAssistedPrevPct, 'pts', true).tone
       },
       {
         label: 'Avg handling time',
@@ -558,12 +560,51 @@
       : 'Live from ClientiQ. Resolving a case also queues a Sage CRM note, applied within about five minutes.';
   }
 
+  /* The SLA windows are read from the server rather than written into the
+     guide, so changing SLA_POLICY cannot leave the explanation describing
+     windows the app no longer uses. */
+  function renderSlaWindows() {
+    var list = $('sla-windows');
+    if (!list) return;
+    var policy = (DATA.metrics && DATA.metrics.slaPolicy) || {};
+    var order = ['High', 'Medium', 'Low'];
+    var entries = order
+      .filter(function (k) { return typeof policy[k] === 'number'; })
+      .map(function (k) { return { name: k, mins: policy[k] }; });
+
+    if (!entries.length) {
+      list.innerHTML = '<li>Windows are set on the server.</li>';
+      return;
+    }
+
+    list.innerHTML = entries.map(function (e) {
+      var label = e.mins >= 60 && e.mins % 60 === 0
+        ? (e.mins / 60) + (e.mins === 60 ? ' hour' : ' hours')
+        : e.mins + ' minutes';
+      return '<li>' + esc(e.name) + ' \u2014 ' + esc(label) + '</li>';
+    }).join('');
+  }
+
+  /* Tabs. The queue stays in the DOM when hidden so the tour, which anchors to
+     elements inside it, is unaffected by which tab is showing. */
+  function showTab(which) {
+    var pairs = [['tab-queue', 'view-queue'], ['tab-kpis', 'view-kpis']];
+    pairs.forEach(function (pair) {
+      var on = pair[0] === which;
+      var tab = $(pair[0]);
+      var view = $(pair[1]);
+      if (tab) tab.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (view) view.hidden = !on;
+    });
+  }
+
   function renderAll() {
     renderKpis();
     renderBars();
     renderGauge();
     renderChips();
     renderRows();
+    renderSlaWindows();
   }
 
   async function init() {
@@ -576,6 +617,11 @@
     renderSource();
     hydrate();
     renderAll();
+
+    document.querySelector('.tabs').addEventListener('click', function (e) {
+      var tab = e.target.closest('.tab');
+      if (tab) showTab(tab.id);
+    });
 
     $('search').addEventListener('input', function (e) {
       state.query = e.target.value;

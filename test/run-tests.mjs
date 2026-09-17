@@ -20,7 +20,7 @@ process.env.RESOLVEIQ_EFFORT = 'medium';
 
 const clientiq = await import('../server/clientiq.mjs');
 const { suggestForTicket, SuggestionError } = await import('../server/suggest.mjs');
-const { createApp } = await import('../server/index.mjs');
+const { createApp, deriveMetrics, londonMidnight } = await import('../server/index.mjs');
 
 /* ---------- ClientiQ client ---------- */
 
@@ -91,6 +91,94 @@ test('upsertCase() refuses a case with no company before calling out', async () 
    Reporting it as a credential problem sends whoever is setting this up
    looking in entirely the wrong place — which is exactly what happened the
    first time the live smoke test was run. */
+/* The KPI row is computed from resolveiq_cases. Getting a day boundary or an
+   average wrong here produces a number that looks plausible and is wrong, which
+   is worse than a blank — so the arithmetic is pinned down. */
+test('KPIs are computed from resolved cases, on UK days', async () => {
+  const todayStart = londonMidnight(0);
+  const yesterdayStart = londonMidnight(1);
+  const at = (base, mins) => new Date(base.getTime() + mins * 60000).toISOString();
+
+  const resolved = [
+    /* today: 30 min, AI-assisted, inside a 60 min SLA */
+    { opened_at: at(todayStart, 600), closed_at: at(todayStart, 630),
+      sla_minutes: 60, priority: 'Medium', ai_confidence: 0.82, satisfaction_score: 5 },
+    /* today: 90 min, unassisted, breaches the same window */
+    { opened_at: at(todayStart, 600), closed_at: at(todayStart, 690),
+      sla_minutes: 60, priority: 'Medium', ai_confidence: null, satisfaction_score: 3 },
+    /* yesterday: must not count toward today */
+    { opened_at: at(yesterdayStart, 60), closed_at: at(yesterdayStart, 120),
+      sla_minutes: 60, priority: 'Medium', ai_confidence: 0.9, satisfaction_score: null }
+  ];
+
+  const tickets = [{ status: 'open' }, { status: 'new' }, { status: 'resolved' }];
+  const m = deriveMetrics(tickets, { slaTargetPct: 95 }, resolved);
+
+  assert.equal(m.resolvedToday, 2, 'only today\'s cases count as today');
+  assert.equal(m.resolvedYesterday, 1, "yesterday's are counted separately");
+  assert.equal(m.openCount, 2, 'resolved tickets are not open');
+  assert.equal(m.avgHandleMins, 60, '(30 + 90) / 2');
+  assert.equal(m.aiAssistedPct, 50, 'one of two used the draft');
+  assert.equal(m.aiAssistedPrevPct, 100, "yesterday's single case used it");
+  assert.equal(m.csat, 4, '(5 + 3) / 2');
+  assert.equal(m.prevCsat, null, 'no scores yesterday means no figure, not zero');
+  assert.equal(m.resolvedWithinSlaToday, 50, 'one of two beat its window');
+});
+
+test('a KPI with no source stays blank rather than reading zero', async () => {
+  const m = deriveMetrics([{ status: 'open' }], { slaTargetPct: 95 }, []);
+
+  /* Nothing resolved today. A count is genuinely zero; an average or a
+     percentage over nothing is unknown, and must not render as 0. */
+  assert.equal(m.resolvedToday, 0);
+  assert.equal(m.avgHandleMins, null, 'no cases means no average, not 0m');
+  assert.equal(m.aiAssistedPct, null, 'no cases means no percentage, not 0%');
+  assert.equal(m.csat, null);
+  assert.equal(m.resolvedWithinSlaToday, null);
+});
+
+test('the UK day boundary is not the UTC one', async () => {
+  /* Through BST a UTC boundary puts an hour of every evening into tomorrow.
+     23:30 London on a July night must belong to that day, not the next. */
+  const july = new Date('2026-07-15T22:30:00Z');       // 23:30 London
+  const start = londonMidnight(0, july);
+  assert.ok(start.getTime() <= july.getTime(),
+    'a 23:30 BST case falls on the day that has already started');
+
+  const asLondonDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(july);
+  assert.equal(asLondonDate, '2026-07-15');
+  assert.equal(start.toISOString(), '2026-07-14T23:00:00.000Z',
+    'London midnight on 15 July is 23:00 UTC on the 14th');
+});
+
+test('the KPI guide ships with the console and starts hidden', async () => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync('index.html', 'utf8');
+
+  assert.match(html, /id="tab-kpis"[\s\S]*?role="tab"/, 'a KPI tab must exist');
+  assert.match(html, /id="view-kpis"[\s\S]*?hidden/, 'the guide starts hidden behind the queue');
+  assert.match(html, /id="tab-queue"[\s\S]*?aria-selected="true"/, 'the queue is the default view');
+
+  /* The guide must not promise a figure the app cannot produce. */
+  assert.match(html, /There is nothing\s+behind this yet/,
+    'CSAT is explained as having no source');
+  assert.match(html, /id="sla-windows"/,
+    'SLA windows are rendered from config, not written into the prose');
+});
+
+test('the SLA windows reach the browser however the queue was loaded', async () => {
+  await withApp(async (base) => {
+    /* The windows are server configuration, so the guide needs them even when
+       the queue fell back to sample data. */
+    const body = await (await fetch(`${base}/api/tickets`)).json();
+    assert.ok(body.metrics.slaPolicy, 'slaPolicy must be sent');
+    assert.equal(typeof body.metrics.slaPolicy.High, 'number');
+    assert.equal(typeof body.metrics.slaPolicy.Default, 'number');
+  });
+});
+
 /* The landing page is the WG Platforms entry screen, and is meant to be copied
    into every iQ app with only the config block changed. These guard the two
    things that would quietly break that: the route, and the config contract. */
