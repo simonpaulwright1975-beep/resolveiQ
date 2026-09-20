@@ -349,6 +349,35 @@ button.primary:hover { background: var(--accent-2); border-color: var(--accent-2
   color: #fff;
 }
 
+/* ---------- the CSAT link in the drawer ---------- */
+
+.feedback-link__hint {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.feedback-link__row { display: flex; gap: 6px; }
+
+.feedback-link__url {
+  flex: 1;
+  min-width: 0;                 /* lets a long URL shrink instead of overflowing */
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+}
+
+.feedback-link__off {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
 /* ---------- tabs ---------- */
 
 .tabs {
@@ -1072,11 +1101,16 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 
       <div class="kpi-guide__item">
         <h3>CSAT</h3>
-        <p class="kpi-guide__what">Customer satisfaction. <strong>There is nothing
-          behind this yet</strong>, so it shows a dash.</p>
-        <p><strong>How to meet it:</strong> nothing to do. The database has a place to
-          store a score, but nobody is asking customers for one, so there is no figure
-          to show. It will fill in on its own if that is ever set up.</p>
+        <p class="kpi-guide__what">Customer satisfaction — the average score out of
+          five, from customers who rated a case you closed today.</p>
+        <p><strong>How to meet it:</strong> ask. Open a case and there is a
+          <em>Ask for a rating</em> box with a link in it; paste that at the end of
+          your reply. The customer taps a number, it lands on that case, and the
+          average appears here.</p>
+        <p class="kpi-guide__note">Nobody is chasing a number. A rating can only be
+          given once per case, links stop working after a month, and a case nobody
+          rates simply does not count towards the average — a quiet day shows a dash
+          rather than a bad score.</p>
       </div>
 
       <div class="kpi-guide__item">
@@ -1917,6 +1951,43 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
 
   var lastFocused = null;
 
+  /* Fetched per case rather than for the whole queue: minting a link is
+     signing work, and only the open case needs one. */
+  async function loadFeedbackLink(t) {
+    if (!t.caseId || t._feedbackLoaded) return;
+    /* openDrawer re-renders by calling itself, so without this the loader
+       would fetch, re-render, fetch again, for ever. */
+    t._feedbackLoaded = true;
+    state.feedbackUrl = null;
+    state.feedbackError = null;
+
+    try {
+      var res = await fetch('/api/feedback/link?case_id=' + encodeURIComponent(t.caseId));
+      var body = await window.RESOLVEIQ_readJson(res);
+      if (!res.ok) throw new Error(body.error || 'Could not build a feedback link.');
+      state.feedbackUrl = body.url;
+    } catch (error) {
+      state.feedbackError = error.message;
+    }
+    if (state.selected === t.id) openDrawer(t.id);
+  }
+
+  /* Copy, with a fallback: the clipboard API needs a secure context, and this
+     app may well be served over plain http on an internal box. Selecting the
+     text is a worse experience than a silent failure is a bug. */
+  async function copyFeedbackLink() {
+    var input = $('fb-url');
+    if (!input || !state.feedbackUrl) return;
+    try {
+      await navigator.clipboard.writeText(state.feedbackUrl);
+      toast('Feedback link copied — paste it at the end of your reply.');
+    } catch (e) {
+      input.focus();
+      input.select();
+      toast('Press Ctrl+C to copy the link.');
+    }
+  }
+
   function openDrawer(id) {
     var t = state.tickets.filter(function (x) { return x.id === id; })[0];
     if (!t) return;
@@ -1971,6 +2042,26 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
         : '') +
       (state.saveNote ? '<p class="save-note">' + esc(state.saveNote) + '</p>' : '') +
 
+      /* The CSAT link. ResolveIQ cannot email the customer, so the way a score
+         gets asked for is Cerian pasting this into the reply she is already
+         sending. Rendered only for a case the database knows about — a link
+         for a case that does not exist yet would 404 for the customer. */
+      (t.caseId
+        ? '<div class="section feedback-link">' +
+            '<span class="label">Ask for a rating</span>' +
+            '<p class="feedback-link__hint">Paste this at the end of your reply. ' +
+            'One tap, scores 1 to 5, and it lands on this case.</p>' +
+            '<div class="feedback-link__row">' +
+              '<input class="feedback-link__url" id="fb-url" readonly value="' +
+                esc(state.feedbackUrl || 'Loading…') + '">' +
+              '<button data-act="copy-feedback"' +
+                (state.feedbackUrl ? '' : ' disabled') + '>Copy</button>' +
+            '</div>' +
+            (state.feedbackError
+              ? '<p class="feedback-link__off">' + esc(state.feedbackError) + '</p>' : '') +
+          '</div>'
+        : '') +
+
       '<div class="actions actions--case">' +
         (state.saving
           ? '<button class="primary" disabled>Saving to the customer record…</button>'
@@ -1982,6 +2073,7 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
       '</div>';
 
     loadHistory(t);
+    loadFeedbackLink(t);
 
     $('drawer').classList.add('open');
     $('drawer').setAttribute('aria-hidden', 'false');
@@ -2160,6 +2252,7 @@ window.RESOLVEIQ_LOAD = async function loadQueue() {
       var btn = e.target.closest('[data-act]');
       if (!btn) return;
       if (btn.dataset.act === 'draft') draft();
+      else if (btn.dataset.act === 'copy-feedback') copyFeedbackLink();
       else act(btn.dataset.act);
     });
 

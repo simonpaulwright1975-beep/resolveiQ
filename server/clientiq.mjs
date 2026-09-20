@@ -88,7 +88,7 @@ async function signIn() {
   return session.token;
 }
 
-async function request(path, { method = 'GET', body, signal } = {}) {
+async function request(path, { method = 'GET', body, prefer, signal } = {}) {
   if (!clientiqConfigured) {
     throw new ClientiqError(
       'ClientiQ is not configured — set SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, RESOLVEIQ_SUPABASE_EMAIL and _PASSWORD.',
@@ -105,7 +105,9 @@ async function request(path, { method = 'GET', body, signal } = {}) {
           apikey: config.clientiq.key,
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          Accept: 'application/json'
+          Accept: 'application/json',
+          /* PostgREST returns no body on a write unless asked. */
+          ...(prefer ? { Prefer: prefer } : {})
         },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal
@@ -260,6 +262,44 @@ export async function deleteCase(id, { signal } = {}) {
   });
 }
 
+/* Record a customer's satisfaction score.
+
+   Reached from a public, unauthenticated page, so it is deliberately narrow:
+   two fields, one case, and only when that case has not been scored already.
+
+   The "not already scored" test is a filter on the UPDATE itself rather than a
+   read followed by a write, so two clicks on the same link cannot both pass a
+   check and then both write. The second matches no rows and changes nothing. */
+export async function setSatisfaction(caseId, score, note, { signal } = {}) {
+  if (!caseId) throw new ClientiqError('a case id is required', 400);
+
+  const rows = await request(
+    `resolveiq_cases?id=eq.${encodeURIComponent(caseId)}` +
+      `&satisfaction_score=is.null&select=case_ref,satisfaction_score`,
+    {
+      method: 'PATCH',
+      body: { satisfaction_score: score, satisfaction_note: note ?? null },
+      prefer: 'return=representation',
+      signal
+    }
+  );
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
+/* Just enough to render the rating page: does this case exist, and has it been
+   scored already. Deliberately returns no subject, customer or company — the
+   page is public, and whoever holds the link should learn nothing from it that
+   they did not already know. */
+export async function caseForFeedback(caseId, { signal } = {}) {
+  if (!caseId) return null;
+  const rows = await request(
+    `resolveiq_cases?id=eq.${encodeURIComponent(caseId)}` +
+      `&select=case_ref,satisfaction_score&limit=1`,
+    { signal }
+  );
+  return rows?.[0] ?? null;
+}
+
 /* Where a queued Sage CRM change has got to: pending -> sending -> sent, or
    dead with a reason after five attempts. */
 export async function sageQueueStatus(queueId, { signal } = {}) {
@@ -281,6 +321,10 @@ export function caseToTicket(row, { company, history } = {}) {
 
   return {
     id: row.case_ref,
+    /* The database's own uuid, separate from the human reference. Needed to
+       mint a feedback link; absent on sample tickets, which is why the console
+       shows no link for them. */
+    caseId: row.id ?? null,
     companyId: row.company_id,
     personId: row.person_id ?? null,
     accountRef: row.account_ref ?? null,

@@ -91,6 +91,85 @@ test('upsertCase() refuses a case with no company before calling out', async () 
    Reporting it as a credential problem sends whoever is setting this up
    looking in entirely the wrong place — which is exactly what happened the
    first time the live smoke test was run. */
+/* CSAT arrives from a public page a customer reaches from an email. It is the
+   only unauthenticated write in the app, so what it cannot do matters as much
+   as what it can. */
+test('a feedback token only opens the case it was minted for', async () => {
+  const fb = await import('../server/feedback.mjs');
+  const { config } = await import('../server/config.mjs');
+  /* The suite must not need an environment variable to run. */
+  config.feedback.secret = config.feedback.secret || 'test-only-signing-secret';
+
+  const id = 'case-aaaa-1111';
+  const token = fb.mintToken(id);
+
+  assert.equal(fb.verifyToken(id, token), true);
+
+  for (const [what, run] of [
+    ['another case', () => fb.verifyToken('case-bbbb-2222', token)],
+    ['a tampered signature', () => fb.verifyToken(id, token.slice(0, -1) + 'X')],
+    ['a forged timestamp', () => fb.verifyToken(id, 'v1.9999999999.' + token.split('.')[2])],
+    ['junk', () => fb.verifyToken(id, 'not-a-token')],
+    ['an empty token', () => fb.verifyToken(id, '')]
+  ]) {
+    assert.throws(run, /not valid/i, `${what} must be refused`);
+  }
+
+  /* A link in a year-old email should not still be scoreable. */
+  assert.throws(() => fb.verifyToken(id, token, Date.now() + 400 * 86400 * 1000), /expired/i);
+});
+
+test('scores outside 1-5 are refused', async () => {
+  const fb = await import('../server/feedback.mjs');
+  assert.equal(fb.parseScore(1), 1);
+  assert.equal(fb.parseScore('5'), 5);
+  for (const bad of [0, 6, -1, 2.5, 'five', null, undefined, NaN, Infinity]) {
+    assert.throws(() => fb.parseScore(bad), /1 to 5/, `${String(bad)} must be refused`);
+  }
+});
+
+test('a case can only be rated once', async () => {
+  const api = await fakeClientiq();
+  const { config } = await import('../server/config.mjs');
+  const realUrl = config.clientiq.url;
+  config.clientiq.url = api.url;
+
+  try {
+    /* Create a case to rate. */
+    const saved = await clientiq.upsertCase({
+      case: { company_id: 23508, subject: 'Rate me', status: 'resolved' }
+    });
+    const id = saved.case.id;
+
+    const first = await clientiq.setSatisfaction(id, 5, 'Very helpful');
+    assert.ok(first, 'the first score is recorded');
+
+    /* Same link, clicked again — the filter must match nothing rather than
+       letting the score be changed. */
+    const second = await clientiq.setSatisfaction(id, 1, 'Changed my mind');
+    assert.equal(second, null, 'a second rating must not overwrite the first');
+  } finally {
+    config.clientiq.url = realUrl;
+    await api.close();
+  }
+});
+
+test('the rating page is served and reveals nothing about the customer', async () => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync('feedback.html', 'utf8');
+
+  /* It must not be indexed, and it must not carry case detail into the page. */
+  assert.match(html, /name="robots"[^>]*noindex/, 'the rating page must not be indexed');
+  assert.doesNotMatch(html, /companyId|company_id|owner_email/,
+    'no customer or owner detail belongs on a public page');
+
+  await withApp(async (base) => {
+    const res = await fetch(`${base}/feedback`);
+    assert.equal(res.status, 200, '/feedback must serve without an extension');
+    assert.match(res.headers.get('content-type'), /text\/html/);
+  });
+});
+
 /* The KPI row is computed from resolveiq_cases. Getting a day boundary or an
    average wrong here produces a number that looks plausible and is wrong, which
    is worse than a blank — so the arithmetic is pinned down. */
@@ -161,9 +240,12 @@ test('the KPI guide ships with the console and starts hidden', async () => {
   assert.match(html, /id="view-kpis"[\s\S]*?hidden/, 'the guide starts hidden behind the queue');
   assert.match(html, /id="tab-queue"[\s\S]*?aria-selected="true"/, 'the queue is the default view');
 
-  /* The guide must not promise a figure the app cannot produce. */
-  assert.match(html, /There is nothing\s+behind this yet/,
-    'CSAT is explained as having no source');
+  /* The guide must describe how CSAT is actually collected — it is the only
+     figure that needs the advisor to do something to exist. */
+  assert.match(html, /Ask for a rating/,
+    'CSAT must point at the link that collects it');
+  assert.doesNotMatch(html, /There is nothing\s+behind this yet/,
+    'the guide must not still say CSAT has no source');
   assert.match(html, /id="sla-windows"/,
     'SLA windows are rendered from config, not written into the prose');
 });

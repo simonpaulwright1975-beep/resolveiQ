@@ -1,0 +1,125 @@
+/* The customer-facing rating page.
+
+   A different audience from the rest of the app: someone on a phone who has
+   clicked a link in an email, has thirty seconds of goodwill, and will never
+   see this page again. One question, big targets, no navigation. Tokens come
+   from styles.css so it still looks like Walter Geering. */
+
+.fb {
+  margin: 0;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: var(--bg);
+}
+
+.fb__card {
+  width: min(100%, 460px);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 28px 24px 24px;
+}
+
+.fb__brand {
+  margin: 0 0 18px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.fb__title { margin: 0 0 6px; font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
+.fb__sub { margin: 0 0 4px; font-size: 14px; color: var(--ink-soft); }
+.fb__ref { font-weight: 700; color: var(--accent); }
+
+.fb__scale { border: 0; margin: 22px 0 0; padding: 0; }
+.fb__legend { padding: 0 0 10px; font-size: 14px; font-weight: 600; }
+
+.fb__buttons { display: flex; gap: 8px; }
+
+/* Big enough to hit with a thumb without looking. */
+.fb__score {
+  flex: 1;
+  min-height: 56px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  font-family: inherit;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.fb__score:hover { background: var(--accent-bg); border-color: var(--accent); }
+.fb__score[aria-checked="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.fb__score:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
+
+.fb__ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fb__label {
+  display: block;
+  margin: 22px 0 7px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.fb__label span { font-weight: 500; color: var(--muted); }
+
+.fb__comment {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font: inherit;
+  font-size: 15px;      /* 16px or more stops iOS zooming the page on focus */
+  color: var(--ink);
+  resize: vertical;
+}
+.fb__comment:focus { outline: none; border-color: var(--accent); background: var(--card); }
+
+.fb__send {
+  width: 100%;
+  margin-top: 18px;
+  padding: 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fb__send:hover:not(:disabled) { background: var(--accent-2); }
+.fb__send:disabled { opacity: .45; cursor: not-allowed; }
+
+.fb__error {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bad-bg);
+  color: var(--bad);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+@media (max-width: 380px) {
+  .fb__score { font-size: 17px; min-height: 50px; }
+  .fb__buttons { gap: 6px; }
+}

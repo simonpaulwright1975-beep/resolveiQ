@@ -408,6 +408,43 @@
 
   var lastFocused = null;
 
+  /* Fetched per case rather than for the whole queue: minting a link is
+     signing work, and only the open case needs one. */
+  async function loadFeedbackLink(t) {
+    if (!t.caseId || t._feedbackLoaded) return;
+    /* openDrawer re-renders by calling itself, so without this the loader
+       would fetch, re-render, fetch again, for ever. */
+    t._feedbackLoaded = true;
+    state.feedbackUrl = null;
+    state.feedbackError = null;
+
+    try {
+      var res = await fetch('/api/feedback/link?case_id=' + encodeURIComponent(t.caseId));
+      var body = await window.RESOLVEIQ_readJson(res);
+      if (!res.ok) throw new Error(body.error || 'Could not build a feedback link.');
+      state.feedbackUrl = body.url;
+    } catch (error) {
+      state.feedbackError = error.message;
+    }
+    if (state.selected === t.id) openDrawer(t.id);
+  }
+
+  /* Copy, with a fallback: the clipboard API needs a secure context, and this
+     app may well be served over plain http on an internal box. Selecting the
+     text is a worse experience than a silent failure is a bug. */
+  async function copyFeedbackLink() {
+    var input = $('fb-url');
+    if (!input || !state.feedbackUrl) return;
+    try {
+      await navigator.clipboard.writeText(state.feedbackUrl);
+      toast('Feedback link copied — paste it at the end of your reply.');
+    } catch (e) {
+      input.focus();
+      input.select();
+      toast('Press Ctrl+C to copy the link.');
+    }
+  }
+
   function openDrawer(id) {
     var t = state.tickets.filter(function (x) { return x.id === id; })[0];
     if (!t) return;
@@ -462,6 +499,26 @@
         : '') +
       (state.saveNote ? '<p class="save-note">' + esc(state.saveNote) + '</p>' : '') +
 
+      /* The CSAT link. ResolveIQ cannot email the customer, so the way a score
+         gets asked for is Cerian pasting this into the reply she is already
+         sending. Rendered only for a case the database knows about — a link
+         for a case that does not exist yet would 404 for the customer. */
+      (t.caseId
+        ? '<div class="section feedback-link">' +
+            '<span class="label">Ask for a rating</span>' +
+            '<p class="feedback-link__hint">Paste this at the end of your reply. ' +
+            'One tap, scores 1 to 5, and it lands on this case.</p>' +
+            '<div class="feedback-link__row">' +
+              '<input class="feedback-link__url" id="fb-url" readonly value="' +
+                esc(state.feedbackUrl || 'Loading…') + '">' +
+              '<button data-act="copy-feedback"' +
+                (state.feedbackUrl ? '' : ' disabled') + '>Copy</button>' +
+            '</div>' +
+            (state.feedbackError
+              ? '<p class="feedback-link__off">' + esc(state.feedbackError) + '</p>' : '') +
+          '</div>'
+        : '') +
+
       '<div class="actions actions--case">' +
         (state.saving
           ? '<button class="primary" disabled>Saving to the customer record…</button>'
@@ -473,6 +530,7 @@
       '</div>';
 
     loadHistory(t);
+    loadFeedbackLink(t);
 
     $('drawer').classList.add('open');
     $('drawer').setAttribute('aria-hidden', 'false');
@@ -651,6 +709,7 @@
       var btn = e.target.closest('[data-act]');
       if (!btn) return;
       if (btn.dataset.act === 'draft') draft();
+      else if (btn.dataset.act === 'copy-feedback') copyFeedbackLink();
       else act(btn.dataset.act);
     });
 

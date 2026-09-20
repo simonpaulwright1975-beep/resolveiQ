@@ -84,6 +84,27 @@ export function fakeClientiq({ failWith = null, queueFails = false, signInFails 
 
     if (failWith) return json(failWith, { message: 'upstream refused' });
 
+    /* PATCH on a case, used by the CSAT write. The important behaviour to
+       reproduce is the satisfaction_score=is.null filter: PostgREST matches no
+       rows when the case is already scored, so the second rating changes
+       nothing and returns an empty array. */
+    if (req.method === 'PATCH' && req.url.startsWith('/rest/v1/resolveiq_cases')) {
+      const id = decodeURIComponent((req.url.match(/id=eq\.([^&]+)/) || [])[1] || '');
+      const requiresUnrated = req.url.includes('satisfaction_score=is.null');
+      const row = [...stored.values()].find((r) => r.id === id);
+      if (!row) return json(200, []);
+      if (requiresUnrated && row.satisfaction_score != null) return json(200, []);
+      Object.assign(row, body);
+      return json(200, [row]);
+    }
+
+    /* Narrow read for the rating page. */
+    if (req.method === 'GET' && req.url.startsWith('/rest/v1/resolveiq_cases?id=eq.')) {
+      const id = decodeURIComponent((req.url.match(/id=eq\.([^&]+)/) || [])[1] || '');
+      const row = [...stored.values()].find((r) => r.id === id);
+      return json(200, row ? [{ case_ref: row.case_ref, satisfaction_score: row.satisfaction_score ?? null }] : []);
+    }
+
     if (req.url.startsWith('/rest/v1/rpc/resolveiq_upsert_case')) {
       const c = body?.payload?.case || {};
       if (!c.company_id) return json(400, { message: 'company_id is required' });

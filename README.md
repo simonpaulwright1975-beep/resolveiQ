@@ -28,7 +28,7 @@ loudly if it finds one in its environment.
 npm install
 cp .env.example .env     # ClientiQ account + an Anthropic key
 npm start                # http://localhost:3000  (console: /console)
-npm test                 # 37 tests, no credentials needed
+npm test                 # 41 tests, no credentials needed
 ```
 
 It runs with nothing configured: no ClientiQ means the sample queue, no API key
@@ -61,8 +61,31 @@ acted on.
 | Resolved today | Closed since **London** midnight, against the same count yesterday. |
 | AI-assisted | Share of today's resolved cases carrying an `ai_confidence`, i.e. where the drafted reply was used. |
 | Avg handling time | Mean minutes from `opened_at` to `closed_at` across today's resolved cases. |
-| CSAT | `satisfaction_score`. Nothing writes to it yet, so this shows `—`. |
+| CSAT | Average score out of five from customers who rated a case closed today. See below. |
 | SLA compliance | Open cases still inside the window their priority gives them. |
+
+## CSAT — collecting a score
+
+ResolveIQ sends no email, so it cannot send a survey. What it can do is mint a
+link the advisor pastes into the reply she is already sending from the customer
+service mailbox. The customer taps a number from one to five, adds a comment if
+they want, and the score lands on that case.
+
+**The link is signed, not stored.** A token is an HMAC over the case id and an
+issue time, so there is no new column, no table to tidy up, and no row to leak —
+the server can verify a link it has never seen before.
+
+| | |
+|---|---|
+| Set `RESOLVEIQ_FEEDBACK_SECRET` | No secret, no feature. There is **no default**: a fallback would live in this repository, and anyone reading it could forge a score for any case. |
+| Set `RESOLVEIQ_PUBLIC_URL` | The link goes in an email, so it must be absolute and work from outside. |
+| Links expire | 30 days by default. A rating request in a month-old email should not still be answerable. |
+| One rating per case | Enforced as a filter on the update itself, not a read-then-write, so two clicks on the same link cannot both pass a check and then both write. |
+
+The rating page is the only unauthenticated write in the app, so it is
+deliberately narrow: one case, a score of 1–5, an optional comment, and nothing
+else. It reveals no customer, company or owner — only the case reference — and
+carries `noindex`.
 
 **"Today" is a UK day, not a UTC one.** Through British Summer Time a UTC
 boundary puts an hour of every evening into tomorrow's figures, so a case closed
@@ -170,6 +193,7 @@ model inside the same call, add the `fallbacks` parameter — see the
 |---|---|
 | `/` | The Walter Geering landing page — the WG Platforms front door. |
 | `/console` | The customer care console. **Bookmark this** to go straight to work. |
+| `/feedback` | The customer's rating page. Public, reached from a link in a reply. |
 
 The landing page is one reusable template shared across the iQ suite: the
 illustrated environment and composition are fixed, and only the logo, name,
@@ -189,6 +213,9 @@ regenerate it from the PNG if the artwork is ever revised.
 | `GET` | `/api/companies?q=` | Company search, for attaching a case. |
 | `GET` | `/api/contacts?company_id=` | People at a company, for the contact picker. |
 | `GET` | `/api/sage-status?queue_id=` | Where a queued Sage CRM change has got to. |
+| `GET` | `/api/feedback/link?case_id=` | Mint the rating link an advisor pastes into a reply. |
+| `GET` | `/api/feedback/case?c=&t=` | **Public.** What the rating page needs to render: case reference only. |
+| `POST` | `/api/feedback` | **Public.** Record a score of 1–5 against the token's case. |
 | `POST` | `/api/suggest` | `{ "ticket": {...} }` → a drafted resolution. |
 | `POST` | `/api/cases` | Write a case to the central customer record. Takes `{ "ticket": {...}, "resolution": "..." }` from the console, or `{ "case": {...}, "event": {...} }` from any other producer. |
 
@@ -211,7 +238,7 @@ App settings are namespaced `RESOLVEIQ_*` so they can't collide with an ambient
 
 ## Testing
 
-`npm test` runs 37 tests against fake ClientiQ and Anthropic servers speaking
+`npm test` runs 41 tests against fake ClientiQ and Anthropic servers speaking
 the real wire formats — the client, mapping, HTTP surface and error paths, with
 no credentials or network.
 

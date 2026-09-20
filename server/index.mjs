@@ -17,6 +17,9 @@ import { fileURLToPath } from 'node:url';
 import { config, claudeConfigured, clientiqConfigured } from './config.mjs';
 import { suggestForTicket, SuggestionError } from './suggest.mjs';
 import * as clientiq from './clientiq.mjs';
+import {
+  feedbackConfigured, feedbackUrl, verifyToken, parseScore, parseComment, FeedbackError
+} from './feedback.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -265,6 +268,7 @@ async function serveStatic(req, res, pathname) {
   let rel;
   if (pathname === '/' || pathname === '/landing') rel = 'landing.html';
   else if (pathname === '/console') rel = 'index.html';
+  else if (pathname === '/feedback') rel = 'feedback.html';
   else rel = pathname.replace(/^\/+/, '');
   /* normalize + prefix check keeps ../ out of the served tree. */
   const target = normalize(join(root, rel));
@@ -401,6 +405,61 @@ export function createApp() {
         const companyId = url.searchParams.get('company_id');
         if (!companyId) return sendJson(res, 400, { error: 'company_id is required' });
         return sendJson(res, 200, { history: await clientiq.activity(companyId) });
+      }
+
+      /* ---------- CSAT ----------
+
+         Two of these are public: a customer following a link from an email has
+         no account and never will. Everything they can do is bounded by the
+         signed token — one case, a score of 1 to 5, and an optional comment. */
+
+      /* What the rating page needs to render itself. */
+      if (url.pathname === '/api/feedback/case') {
+        const caseId = url.searchParams.get('c');
+        const token = url.searchParams.get('t');
+        verifyToken(caseId, token);
+
+        const row = await clientiq.caseForFeedback(caseId);
+        if (!row) return sendJson(res, 404, { error: 'We could not find that case.' });
+
+        return sendJson(res, 200, {
+          caseRef: row.case_ref,
+          alreadyRated: row.satisfaction_score != null,
+          team: config.identity.teamName
+        });
+      }
+
+      /* Record a score. */
+      if (url.pathname === '/api/feedback') {
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'Use POST' });
+
+        const body = await readBody(req);
+        verifyToken(body?.c, body?.t);
+
+        const score = parseScore(body?.score);
+        const comment = parseComment(body?.comment);
+
+        const saved = await clientiq.setSatisfaction(body.c, score, comment);
+        if (!saved) {
+          /* No rows matched, which means it was already scored. Not an error
+             worth alarming a customer with — thank them and move on. */
+          return sendJson(res, 200, { ok: true, alreadyRated: true });
+        }
+        return sendJson(res, 200, { ok: true, alreadyRated: false, caseRef: saved.case_ref });
+      }
+
+      /* The link an advisor pastes into her reply. Console-side, not public. */
+      if (url.pathname === '/api/feedback/link') {
+        const caseId = url.searchParams.get('case_id');
+        if (!caseId) return sendJson(res, 400, { error: 'case_id is required' });
+        if (!feedbackConfigured()) {
+          return sendJson(res, 503, {
+            error: 'Feedback links are off — set RESOLVEIQ_FEEDBACK_SECRET to switch them on.'
+          });
+        }
+        const origin = config.feedback.publicUrl ||
+          `http://${req.headers.host || `localhost:${config.port}`}`;
+        return sendJson(res, 200, { url: feedbackUrl(caseId, { origin }) });
       }
 
       /* Where a queued Sage CRM change has got to. */

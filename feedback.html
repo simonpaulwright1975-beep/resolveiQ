@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How did we do? — Walter Geering</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d5a3b'/%3E%3Cpath d='M9 16.5 L14 21.5 L23 11' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/feedback.css">
+</head>
+<body class="fb">
+  <main class="fb__card">
+    <p class="fb__brand">Walter Geering · <span id="fb-team">Customer Service</span></p>
+
+    <div id="fb-form" hidden>
+      <h1 class="fb__title">How did we do?</h1>
+      <p class="fb__sub">Case <span id="fb-ref" class="fb__ref"></span></p>
+
+      <fieldset class="fb__scale">
+        <legend class="fb__legend">How happy are you with how we handled it?</legend>
+        <div class="fb__buttons" id="fb-buttons" role="radiogroup" aria-label="Score out of five"></div>
+      </fieldset>
+
+      <label class="fb__label" for="fb-comment">Anything you'd like to add? <span>Optional</span></label>
+      <textarea id="fb-comment" class="fb__comment" rows="3"
+                maxlength="2000" placeholder="What went well, or what we could do better"></textarea>
+
+      <button class="fb__send" id="fb-send" disabled>Send feedback</button>
+      <p class="fb__error" id="fb-error" role="alert" hidden></p>
+    </div>
+
+    <div id="fb-done" hidden>
+      <h1 class="fb__title">Thank you</h1>
+      <p class="fb__sub" id="fb-done-text">That's been passed to the team.</p>
+    </div>
+
+    <div id="fb-problem" hidden>
+      <h1 class="fb__title">This link isn't working</h1>
+      <p class="fb__sub" id="fb-problem-text"></p>
+      <p class="fb__sub">If you still need help, just reply to the email and we'll pick it up.</p>
+    </div>
+  </main>
+
+  <script src="assets/api.js"></script>
+  <script src="assets/feedback.js"></script>
+</body>
+</html>

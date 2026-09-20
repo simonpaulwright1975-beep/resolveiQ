@@ -67,6 +67,21 @@ export const config = {
     advisorEmail: process.env.RESOLVEIQ_ADVISOR_EMAIL || ''
   },
 
+  /* CSAT feedback links.
+
+     No secret means the feature is off. There is deliberately no default:
+     a fallback would live in the repository, and anyone reading it could
+     forge a satisfaction score for any case. */
+  feedback: {
+    secret: process.env.RESOLVEIQ_FEEDBACK_SECRET || '',
+    /* Where a customer's browser reaches this app. Needed because the link is
+       pasted into an email, so it has to be absolute and externally valid —
+       localhost is no use to a customer. */
+    publicUrl: process.env.RESOLVEIQ_PUBLIC_URL || '',
+    /* A link in an old email should not still be scoreable years later. */
+    maxAgeDays: num(process.env.RESOLVEIQ_FEEDBACK_MAX_AGE_DAYS, 30)
+  },
+
   claude: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
     model: process.env.RESOLVEIQ_MODEL || 'claude-opus-5',
