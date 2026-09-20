@@ -108,9 +108,44 @@ export function fakeClientiq({ failWith = null, queueFails = false, signInFails 
     if (req.url.startsWith('/rest/v1/rpc/resolveiq_upsert_case')) {
       const c = body?.payload?.case || {};
       if (!c.company_id) return json(400, { message: 'company_id is required' });
+
+      /* Mirror the real function's cost-of-failure gate and its merge rules:
+         an absent cof key leaves the existing decision alone. */
+      const priorRow = stored.get(c.case_ref);
+      let cof = {
+        cof_status: priorRow?.cof_status ?? null,
+        cof_amount: priorRow?.cof_amount ?? null,
+        cof_reason: priorRow?.cof_reason ?? null,
+        cof_note: priorRow?.cof_note ?? null,
+        cof_recorded_by: priorRow?.cof_recorded_by ?? null
+      };
+      if (c.cof && typeof c.cof === 'object') {
+        const st = c.cof.status || null;
+        if (st && st !== 'none' && st !== 'cost') {
+          return json(400, { message: `cof.status must be 'none' or 'cost'` });
+        }
+        if (st === 'cost' && !(Number(c.cof.amount) > 0)) {
+          return json(400, { message: 'a cost needs an amount greater than zero' });
+        }
+        if (st === 'cost' && !String(c.cof.reason || '').trim()) {
+          return json(400, { message: 'a cost needs a reason' });
+        }
+        cof = {
+          cof_status: st,
+          cof_amount: st === 'cost' ? Number(c.cof.amount) : null,
+          cof_reason: st === 'cost' ? c.cof.reason : null,
+          cof_note: c.cof.note ?? null,
+          cof_recorded_by: c.cof.recorded_by ?? null
+        };
+      }
+      if (c.status === 'resolved' && !cof.cof_status) {
+        return json(400, {
+          message: 'This case cannot be closed until its cost of failure is recorded — either an amount and a reason, or a note that it cost nothing.'
+        });
+      }
       const ref = c.case_ref || 'RQ-0' + (2000 + stored.size);
       const existing = stored.get(ref);
-      const row = Object.assign({ id: 'uuid-' + stored.size, case_ref: ref }, existing, c, {
+      const row = Object.assign({ id: 'uuid-' + stored.size, case_ref: ref }, existing, c, cof, {
         case_ref: ref,
         closed_at: c.status === 'resolved' ? new Date().toISOString() : null
       });

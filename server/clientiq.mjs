@@ -343,6 +343,16 @@ export function caseToTicket(row, { company, history } = {}) {
     aiSuggestion: null,
     aiSummary: row.ai_summary || null,
     escalate: row.ai_escalate ?? null,
+    /* Cost of failure. cof.status null means nobody has decided yet, which is
+       what the console gates closing on. */
+    cof: {
+      status: row.cof_status ?? null,
+      amount: row.cof_amount == null ? null : Number(row.cof_amount),
+      reason: row.cof_reason ?? null,
+      note: row.cof_note ?? null,
+      recordedAt: row.cof_recorded_at ?? null,
+      recordedBy: row.cof_recorded_by ?? null
+    },
     messages: row.note ? [{ who: company?.primary_contact_name || 'Customer', at: '', text: row.note }] : [],
     history: history || []
   };

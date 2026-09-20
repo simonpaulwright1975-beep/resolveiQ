@@ -28,7 +28,7 @@ loudly if it finds one in its environment.
 npm install
 cp .env.example .env     # ClientiQ account + an Anthropic key
 npm start                # http://localhost:3000  (console: /console)
-npm test                 # 41 tests, no credentials needed
+npm test                 # 45 tests, no credentials needed
 ```
 
 It runs with nothing configured: no ClientiQ means the sample queue, no API key
@@ -63,6 +63,45 @@ acted on.
 | Avg handling time | Mean minutes from `opened_at` to `closed_at` across today's resolved cases. |
 | CSAT | Average score out of five from customers who rated a case closed today. See below. |
 | SLA compliance | Open cases still inside the window their priority gives them. |
+
+## Cost of failure
+
+When a case costs the business money — a re-delivery, a credit note, goodwill,
+scrapped stock — the cost is recorded against it.
+
+**A case cannot be closed until someone has decided.** Either a figure and a
+reason, or "this cost nothing". An undecided case is the one that never gets
+revisited.
+
+That gate is a **CHECK constraint**, not an application rule:
+
+```sql
+check (status <> 'resolved' or cof_status is not null)
+```
+
+Call iQ writes through the same function, and a rule that lives only in the
+console holds until the day something else closes a case. The RPC raises first,
+so the caller gets a sentence rather than a constraint name to look up.
+
+| | |
+|---|---|
+| `cof_status` | `null` = undecided · `none` = cost nothing · `cost` = it did |
+| `cof_amount`, `cof_reason` | Both required when `cost`, both cleared when `none` |
+| `cof_note` | Optional |
+| `cof_recorded_at`, `cof_recorded_by` | Who decided, and when |
+
+**Editing later is the normal case, not an exception.** The credit note often
+lands days after the call, so *Change this* reopens the decision on a case that
+is already closed, and the case stays closed.
+
+**An absent `cof` key means "leave it alone".** That distinction matters: if an
+ordinary save sent `{status: null}`, every save that happened to omit a decision
+would silently clear one already made.
+
+The reasons are configuration (`COF_REASONS`), not code — this is a business
+taxonomy that will change, and adding a line to it should not need a deploy.
+The chosen text is stored on the case, so editing the list later does not
+rewrite history.
 
 ## CSAT — collecting a score
 
@@ -238,7 +277,7 @@ App settings are namespaced `RESOLVEIQ_*` so they can't collide with an ambient
 
 ## Testing
 
-`npm test` runs 41 tests against fake ClientiQ and Anthropic servers speaking
+`npm test` runs 45 tests against fake ClientiQ and Anthropic servers speaking
 the real wire formats — the client, mapping, HTTP surface and error paths, with
 no credentials or network.
 

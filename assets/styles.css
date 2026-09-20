@@ -347,6 +347,76 @@ button.primary:hover { background: var(--accent-2); border-color: var(--accent-2
   color: #fff;
 }
 
+/* ---------- cost of failure ---------- */
+
+.cof--undecided {
+  padding: 12px;
+  margin-inline: -12px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-bg);
+}
+
+.cof--undecided > .label { color: var(--warn); }
+
+.cof__hint { margin: 0 0 9px; font-size: 13px; color: var(--ink-2); }
+
+.cof__choice { display: flex; gap: 6px; }
+
+.cof__opt {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+/* The :hover state has to be spelled out. `button:hover` is (0,1,1) and beats
+   a bare `.cof__opt--on` at (0,1,0), so the selected option lost its fill the
+   moment the pointer was over it — which is always, right after clicking —
+   leaving white text on a pale ground. */
+.cof__opt--on,
+button.cof__opt--on:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.cof__fields { display: flex; gap: 8px; margin-top: 10px; }
+.cof__field { flex: 1; display: block; }
+.cof__field--wide { margin-top: 10px; }
+.cof__field > .label { display: block; margin-bottom: 4px; }
+.cof__field em { font-style: normal; font-weight: 500; text-transform: none; letter-spacing: 0; }
+
+.cof__field input,
+.cof__field select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.cof__field input:focus,
+.cof__field select:focus { outline: none; border-color: var(--accent); }
+
+.cof__actions { display: flex; gap: 6px; margin-top: 12px; }
+
+.cof__settled { margin: 0 0 4px; font-size: 14px; }
+.cof__note { margin: 0 0 4px; font-size: 13px; color: var(--ink-2); }
+.cof__by { margin: 0 0 9px; font-size: 12px; color: var(--muted); }
+
+.cof__error {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  background: var(--bad-bg);
+  color: var(--bad);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 /* ---------- the CSAT link in the drawer ---------- */
 
 .feedback-link__hint {

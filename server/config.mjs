@@ -67,6 +67,44 @@ export const config = {
     advisorEmail: process.env.RESOLVEIQ_ADVISOR_EMAIL || ''
   },
 
+  /* Cost of failure.
+
+     The reasons are configuration rather than code, because this is a business
+     taxonomy that will change and nobody should need a deploy to add a line to
+     it. Override with a JSON array, e.g.
+       COF_REASONS='["Re-delivery","Credit note","Goodwill gesture"]'
+
+     Changing the list does not disturb cases already recorded: the reason is
+     stored as the text that was chosen, so history keeps the wording that was
+     true at the time. */
+  cofReasons: (() => {
+    const fallback = [
+      'Re-delivery',
+      'Replacement goods',
+      'Credit note or refund',
+      'Carriage or courier charge',
+      'Collection cost',
+      'Goodwill gesture',
+      'Write-off or scrapped stock',
+      'Rework',
+      'Lost order',
+      'Other'
+    ];
+    const raw = process.env.COF_REASONS;
+    if (!raw) return fallback;
+    try {
+      const parsed = JSON.parse(raw);
+      const clean = Array.isArray(parsed)
+        ? parsed.map((r) => String(r).trim()).filter(Boolean)
+        : [];
+      if (!clean.length) throw new Error('empty');
+      return clean;
+    } catch {
+      console.warn('COF_REASONS is not a non-empty JSON array of strings — using the defaults.');
+      return fallback;
+    }
+  })(),
+
   /* CSAT feedback links.
 
      No secret means the feature is off. There is deliberately no default:

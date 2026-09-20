@@ -62,7 +62,7 @@ async function loadQueue() {
        much to the sample queue — and the KPI guide reads them from here. */
     return {
       ...sample,
-      metrics: { ...sample.metrics, slaPolicy: config.slaPolicy },
+      metrics: { ...sample.metrics, slaPolicy: config.slaPolicy, cofReasons: config.cofReasons },
       source: 'sample',
       reason: 'ClientiQ is not configured'
     };
@@ -120,7 +120,7 @@ async function loadQueue() {
     }
     return {
       ...sample,
-      metrics: { ...sample.metrics, slaPolicy: config.slaPolicy },
+      metrics: { ...sample.metrics, slaPolicy: config.slaPolicy, cofReasons: config.cofReasons },
       source: 'sample',
       reason: `ClientiQ unreachable — ${error.message}`
     };
@@ -221,6 +221,9 @@ export function deriveMetrics(tickets, base, resolved = []) {
     /* Sent so the KPI guide can state the real windows rather than repeating
        numbers in prose that quietly go stale when SLA_POLICY changes. */
     slaPolicy: config.slaPolicy,
+    /* Configuration, not data — sent on every path so the drawer's reason list
+       is always the one the server is actually validating against. */
+    cofReasons: config.cofReasons,
     resolvedWithinSlaToday: today.length ? Math.round((withinSla / today.length) * 100) : null,
     openCount: open.length
   };
@@ -367,6 +370,19 @@ export function createApp() {
             next_action: Array.isArray(t.nextSteps) ? t.nextSteps.join('; ') : null,
             source: 'resolveiq'
           };
+
+          /* Only sent when the console actually supplied one. An absent cof key
+             means "leave it alone"; sending {status: null} on every save would
+             wipe a decision made earlier. */
+          if (body.cof && typeof body.cof === 'object') {
+            caseFields.cof = {
+              status: body.cof.status ?? null,
+              amount: body.cof.amount ?? null,
+              reason: body.cof.reason ?? null,
+              note: body.cof.note ?? null,
+              recorded_by: config.identity.advisorEmail || body.agent || null
+            };
+          }
           if (!event && body.resolution) {
             event = {
               kind: 'customer_message',

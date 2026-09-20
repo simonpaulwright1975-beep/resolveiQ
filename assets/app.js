@@ -19,7 +19,18 @@
     draftError: null,
     saving: false,          // a /api/cases call is in flight
     saveError: null,
-    saveNote: null          // e.g. saved but not linked to a customer
+    saveNote: null,         // e.g. saved but not linked to a customer
+
+    /* Cost of failure. cofEditing reopens the form on a case that already has
+       a decision, so a figure can be corrected later without reopening the
+       case itself. */
+    cofEditing: false,
+    cofSaving: false,
+    cofError: null,
+    cofDraft: { status: null, amount: '', reason: '', note: '' },
+
+    feedbackUrl: null,
+    feedbackError: null
   };
 
   /* ---------- persistence (best effort — private mode, blocked storage) ---------- */
@@ -441,9 +452,162 @@
     }
   }
 
+  /* ---------- cost of failure ---------- */
+
+  function cofOf(t) { return t.cof || {}; }
+  function cofDecided(t) { return cofOf(t).status === 'none' || cofOf(t).status === 'cost'; }
+
+  function cofReasons() {
+    var list = (DATA.metrics && DATA.metrics.cofReasons) || [];
+    return Array.isArray(list) && list.length ? list : ['Other'];
+  }
+
+  function cofBody(t) {
+    var c = cofOf(t);
+
+    /* Settled: show what was recorded, with a way back in. Editing later is
+       the normal case, not an exception — the credit note often lands days
+       after the call. */
+    if (cofDecided(t) && !state.cofEditing) {
+      var summary = c.status === 'none'
+        ? '<b>No cost</b> — this case did not cost the business anything.'
+        : '<b>' + esc(cofMoney(c.amount)) + '</b> · ' + esc(c.reason || '');
+      return '<p class="cof__settled">' + summary + '</p>' +
+        (c.note ? '<p class="cof__note">' + esc(c.note) + '</p>' : '') +
+        (c.recordedBy
+          ? '<p class="cof__by">Recorded by ' + esc(c.recordedBy) + '</p>' : '') +
+        '<button data-act="cof-edit">Change this</button>';
+    }
+
+    var status = state.cofDraft.status;
+    var reasons = cofReasons();
+
+    return '<p class="cof__hint">Did this case cost the business money?</p>' +
+      '<div class="cof__choice">' +
+        '<button data-act="cof-pick-none" class="cof__opt' +
+          (status === 'none' ? ' cof__opt--on' : '') + '">No cost</button>' +
+        '<button data-act="cof-pick-cost" class="cof__opt' +
+          (status === 'cost' ? ' cof__opt--on' : '') + '">It cost us</button>' +
+      '</div>' +
+
+      (status === 'cost'
+        ? '<div class="cof__fields">' +
+            '<label class="cof__field"><span class="label">Amount</span>' +
+              '<input id="cof-amount" type="number" min="0.01" step="0.01" inputmode="decimal" ' +
+                'placeholder="0.00" value="' + esc(state.cofDraft.amount || '') + '"></label>' +
+            '<label class="cof__field"><span class="label">Reason</span>' +
+              '<select id="cof-reason">' +
+                '<option value="">Choose a reason…</option>' +
+                reasons.map(function (r) {
+                  return '<option' + (state.cofDraft.reason === r ? ' selected' : '') +
+                    '>' + esc(r) + '</option>';
+                }).join('') +
+              '</select></label>' +
+          '</div>'
+        : '') +
+
+      (status
+        ? '<label class="cof__field cof__field--wide"><span class="label">Note' +
+            '<em> — optional</em></span>' +
+            '<input id="cof-note" placeholder="Anything worth knowing later" value="' +
+              esc(state.cofDraft.note || '') + '"></label>'
+        : '') +
+
+      (state.cofError ? '<p class="cof__error">' + esc(state.cofError) + '</p>' : '') +
+
+      (status
+        ? '<div class="cof__actions">' +
+            '<button class="primary" data-act="cof-save"' +
+              (state.cofSaving ? ' disabled' : '') + '>' +
+              (state.cofSaving ? 'Saving…' : 'Save') + '</button>' +
+            (cofDecided(t) ? '<button data-act="cof-cancel">Cancel</button>' : '') +
+          '</div>'
+        : '');
+  }
+
+  function cofMoney(n) {
+    var v = Number(n);
+    return '\u00A3' + (Number.isFinite(v) ? v.toFixed(2) : '0.00');
+  }
+
+  /* Read the fields before any re-render: rendering replaces the inputs, so
+     reading them afterwards gets the defaults back. */
+  function readCofFields() {
+    var amount = $('cof-amount');
+    var reason = $('cof-reason');
+    var note = $('cof-note');
+    if (amount) state.cofDraft.amount = amount.value.trim();
+    if (reason) state.cofDraft.reason = reason.value;
+    if (note) state.cofDraft.note = note.value.trim();
+  }
+
+  async function saveCof(t) {
+    readCofFields();
+    var d = state.cofDraft;
+    state.cofError = null;
+
+    if (d.status === 'cost') {
+      var amount = Number(d.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        state.cofError = 'Enter what it cost, as a number greater than zero.';
+        return openDrawer(t.id);
+      }
+      if (!d.reason) {
+        state.cofError = 'Pick a reason — the figure is not much use without one.';
+        return openDrawer(t.id);
+      }
+    }
+
+    state.cofSaving = true;
+    openDrawer(t.id);
+
+    try {
+      var res = await fetch('/api/cases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticket: t,
+          agent: ME,
+          cof: d.status === 'none'
+            ? { status: 'none', note: d.note || null }
+            : { status: 'cost', amount: Number(d.amount), reason: d.reason, note: d.note || null }
+        })
+      });
+      var body = await window.RESOLVEIQ_readJson(res);
+      if (!res.ok) throw new Error(body.error || 'Could not save the cost of failure.');
+
+      t.cof = {
+        status: d.status,
+        amount: d.status === 'cost' ? Number(d.amount) : null,
+        reason: d.status === 'cost' ? d.reason : null,
+        note: d.note || null,
+        recordedBy: ME
+      };
+      state.cofEditing = false;
+      state.cofDraft = { status: null, amount: '', reason: '', note: '' };
+      toast(d.status === 'none' ? 'Recorded as no cost.' : 'Cost of failure saved.');
+    } catch (error) {
+      state.cofError = error.message;
+    } finally {
+      state.cofSaving = false;
+      openDrawer(t.id);
+    }
+  }
+
   function openDrawer(id) {
     var t = state.tickets.filter(function (x) { return x.id === id; })[0];
     if (!t) return;
+
+    /* openDrawer doubles as the drawer's re-render, so only clear the
+       cost-of-failure form when the case actually changes — resetting it on
+       every re-render would wipe what she is part-way through typing. */
+    if (state.selected !== id) {
+      state.cofEditing = false;
+      state.cofSaving = false;
+      state.cofError = null;
+      state.cofDraft = { status: null, amount: '', reason: '', note: '' };
+    }
+
     state.selected = id;
     lastFocused = document.activeElement;
 
@@ -494,6 +658,14 @@
         : '') +
       (state.saveNote ? '<p class="save-note">' + esc(state.saveNote) + '</p>' : '') +
 
+      /* Cost of failure. Shown on every case, open or closed: a decision can
+         be made at the time or revisited later when the credit note lands. */
+      '<div class="section cof' + (cofDecided(t) ? '' : ' cof--undecided') + '">' +
+        '<span class="label">Cost of failure' +
+          (cofDecided(t) ? '' : ' — needed before closing') + '</span>' +
+        cofBody(t) +
+      '</div>' +
+
       /* The CSAT link. ResolveIQ cannot email the customer, so the way a score
          gets asked for is Cerian pasting this into the reply she is already
          sending. Rendered only for a case the database knows about — a link
@@ -518,7 +690,10 @@
         (state.saving
           ? '<button class="primary" disabled>Saving to the customer record…</button>'
           : isOpen(t)
-          ? '<button class="primary" data-act="resolve">Send reply &amp; resolve</button>' +
+          ? (cofDecided(t)
+              ? '<button class="primary" data-act="resolve">Send reply &amp; resolve</button>'
+              : '<button class="primary" disabled title="Record the cost of failure first">' +
+                'Send reply &amp; resolve</button>') +
             (t.assignee === ME ? '' : '<button data-act="claim">Assign to me</button>') +
             (t.status === 'pending' ? '' : '<button data-act="pending">Move to pending</button>')
           : '<button data-act="reopen">Reopen ticket</button>') +
@@ -703,9 +878,37 @@
     $('drawer-body').addEventListener('click', function (e) {
       var btn = e.target.closest('[data-act]');
       if (!btn) return;
-      if (btn.dataset.act === 'draft') draft();
-      else if (btn.dataset.act === 'copy-feedback') copyFeedbackLink();
-      else act(btn.dataset.act);
+      var a = btn.dataset.act;
+      var t = state.selected && state.tickets.find(function (x) { return x.id === state.selected; });
+
+      if (a === 'draft') draft();
+      else if (a === 'copy-feedback') copyFeedbackLink();
+      else if (a === 'cof-pick-none' || a === 'cof-pick-cost') {
+        readCofFields();
+        state.cofDraft.status = a === 'cof-pick-none' ? 'none' : 'cost';
+        state.cofError = null;
+        if (t) openDrawer(t.id);
+      }
+      else if (a === 'cof-edit') {
+        var c = (t && t.cof) || {};
+        state.cofEditing = true;
+        state.cofError = null;
+        state.cofDraft = {
+          status: c.status || null,
+          amount: c.amount == null ? '' : String(c.amount),
+          reason: c.reason || '',
+          note: c.note || ''
+        };
+        if (t) openDrawer(t.id);
+      }
+      else if (a === 'cof-cancel') {
+        state.cofEditing = false;
+        state.cofError = null;
+        state.cofDraft = { status: null, amount: '', reason: '', note: '' };
+        if (t) openDrawer(t.id);
+      }
+      else if (a === 'cof-save') { if (t) saveCof(t); }
+      else act(a);
     });
 
     $('drawer-close').addEventListener('click', closeDrawer);

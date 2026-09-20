@@ -91,6 +91,87 @@ test('upsertCase() refuses a case with no company before calling out', async () 
    Reporting it as a credential problem sends whoever is setting this up
    looking in entirely the wrong place — which is exactly what happened the
    first time the live smoke test was run. */
+/* Cost of failure. The point of the feature is the gate, so that is what gets
+   pinned: a case that has not been costed cannot be closed. */
+test('a case cannot be closed without a cost-of-failure decision', async () => {
+  await withApp(async (base) => {
+    const close = (cof) => fetch(`${base}/api/cases`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticket: { id: 'RQ-COF-1', companyId: 23508, subject: 'Crushed boxes', status: 'resolved' },
+        ...(cof ? { cof } : {})
+      })
+    });
+
+    const refused = await close(null);
+    assert.equal(refused.status, 400, 'closing with no decision must be refused');
+    assert.match((await refused.json()).error, /cost of failure/i,
+      'and must say why, not just fail');
+
+    /* "It cost nothing" is a decision, and is enough to close. */
+    const none = await close({ status: 'none' });
+    assert.equal(none.status, 200, '"no cost" is a decision');
+  });
+});
+
+test('a recorded cost needs both a figure and a reason', async () => {
+  await withApp(async (base) => {
+    const save = (cof) => fetch(`${base}/api/cases`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticket: { id: 'RQ-COF-2', companyId: 23508, subject: 'Re-delivery', status: 'open' },
+        cof
+      })
+    });
+
+    /* A number with no reason cannot be reported on; a reason with no number
+       is not a cost. Both are refused. */
+    assert.equal((await save({ status: 'cost', amount: 50 })).status, 400, 'a cost needs a reason');
+    assert.equal((await save({ status: 'cost', reason: 'Re-delivery' })).status, 400,
+      'a cost needs an amount');
+    assert.equal((await save({ status: 'cost', amount: 0, reason: 'Re-delivery' })).status, 400,
+      'zero is not a cost');
+    assert.equal((await save({ status: 'nearly' })).status, 400, 'only none or cost');
+
+    const ok = await save({ status: 'cost', amount: 148.5, reason: 'Re-delivery' });
+    assert.equal(ok.status, 200);
+  });
+});
+
+test('an ordinary save does not wipe a decision already made', async () => {
+  await withApp(async (base) => {
+    const post = (payload) => fetch(`${base}/api/cases`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const ticket = { id: 'RQ-COF-3', companyId: 23508, subject: 'Goodwill', status: 'open' };
+    await post({ ticket, cof: { status: 'cost', amount: 32, reason: 'Goodwill gesture' } });
+
+    /* No cof key at all means "leave it alone" — otherwise every save that
+       happened to omit it would silently clear the figure. */
+    await post({ ticket });
+
+    const closed = await post({ ticket: { ...ticket, status: 'resolved' } });
+    assert.equal(closed.status, 200,
+      'the earlier decision still stands, so closing is allowed');
+  });
+});
+
+test('the reason list reaches the browser and is configuration, not code', async () => {
+  await withApp(async (base) => {
+    const body = await (await fetch(`${base}/api/tickets`)).json();
+    assert.ok(Array.isArray(body.metrics.cofReasons), 'reasons must be sent');
+    assert.ok(body.metrics.cofReasons.length, 'and must not be empty');
+
+    const { readFileSync } = await import('node:fs');
+    assert.doesNotMatch(readFileSync('assets/app.js', 'utf8'), /'Re-delivery'/,
+      'the list belongs in config, not hard-coded in the console');
+  });
+});
+
 /* CSAT arrives from a public page a customer reaches from an email. It is the
    only unauthenticated write in the app, so what it cannot do matters as much
    as what it can. */
@@ -137,7 +218,8 @@ test('a case can only be rated once', async () => {
   try {
     /* Create a case to rate. */
     const saved = await clientiq.upsertCase({
-      case: { company_id: 23508, subject: 'Rate me', status: 'resolved' }
+      case: { company_id: 23508, subject: 'Rate me', status: 'resolved',
+              cof: { status: 'none' } }
     });
     const id = saved.case.id;
 
@@ -516,7 +598,9 @@ test('POST /api/cases stores a case and reports the Sage CRM queue', async () =>
         ticket: { id: 'RQ-01000', companyId: 23508, subject: 'Refund not received',
                   status: 'resolved', priority: 'High', channel: 'Email' },
         agent: 'care@example.com',
-        resolution: 'Refund re-issued'
+        resolution: 'Refund re-issued',
+        /* Closing needs a cost-of-failure decision. */
+        cof: { status: 'none' }
       })
     });
     const body = await res.json();
@@ -541,7 +625,10 @@ test('POST /api/cases warns when the Sage CRM copy could not be queued', async (
       const body = await (await fetch(`${base}/api/cases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticket: { id: 'RQ-9', companyId: 23508, subject: 'x', status: 'resolved' } })
+        body: JSON.stringify({
+          ticket: { id: 'RQ-9', companyId: 23508, subject: 'x', status: 'resolved' },
+          cof: { status: 'none' }
+        })
       })).json();
       assert.equal(body.queued_to_sage, false);
       assert.match(body.warning, /Reps working in Sage will not see it/);
