@@ -60,7 +60,6 @@ function ticketToPrompt(ticket) {
     `Subject: ${ticket.subject}`
   ];
 
-  if (ticket.value) lines.push(`Order value: £${Number(ticket.value).toFixed(2)}`);
 
   if (ticket.messages?.length) {
     lines.push('', 'Conversation so far:');

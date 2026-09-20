@@ -343,7 +343,6 @@ export function caseToTicket(row, { company, history } = {}) {
     aiSuggestion: null,
     aiSummary: row.ai_summary || null,
     escalate: row.ai_escalate ?? null,
-    value: 0,
     messages: row.note ? [{ who: company?.primary_contact_name || 'Customer', at: '', text: row.note }] : [],
     history: history || []
   };

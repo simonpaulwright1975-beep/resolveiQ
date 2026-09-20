@@ -83,10 +83,6 @@
 
   function mins(n) { return n < 60 ? n + 'm' : Math.floor(n / 60) + 'h ' + (n % 60) + 'm'; }
 
-  function money(n) {
-    return '£' + n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-
   /* ---------- KPI row ---------- */
 
   function renderKpis() {
@@ -466,7 +462,6 @@
           '<div><span class="label">Customer</span><b>' + esc(t.customer) + '</b></div>' +
           '<div><span class="label">Account</span><b>' + esc(t.account) + '</b></div>' +
           '<div><span class="label">Waiting</span><b class="num">' + (isOpen(t) ? mins(t.waitMins) : 'Resolved') + '</b></div>' +
-          '<div><span class="label">Order value</span><b class="num">' + (t.value ? money(t.value) : '—') + '</b></div>' +
         '</div>' +
       '</div>' +
 
