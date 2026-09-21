@@ -34,6 +34,10 @@ were changed **out of band** from this repo:
 Both reproduce what is already live, so adopting either is a no-op. Neither has
 a pull request open — that is for their owners to raise.
 
+The ClientiQ branch also seeds `resolveiq@waltergeering.co.uk` onto
+`clientiq_access`, so a rebuilt environment comes up with ResolveIQ working
+rather than silently unable to read anything.
+
 **The Call iQ one is not a formality.** It breaks a rule that app states in its
 own CLAUDE.md: *"all RLS-on with NO policies — service-role only"*.
 `dialpad_calls` is now the only one of its five tables with a policy and the

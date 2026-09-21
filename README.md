@@ -19,10 +19,18 @@ ResolveIQ ──write─►  public.resolveiq_cases   its own cases
 ```
 
 **Access is gated on ClientiQ's list.** Since ClientiQ's `0027_clientiq_access`,
-reading the customer book requires being in `public.clientiq_access` — seven
-people today. Whatever account ResolveIQ signs in as **must be on that list**,
-or it reads nothing. That list is deliberately curated and belongs to ClientiQ,
-so adding a service account to it is their call, not ResolveIQ's.
+reading the customer book requires being in `public.clientiq_access`. The
+service account **`resolveiq@waltergeering.co.uk` is on it** (added 21 Sep 2026,
+and seeded into ClientiQ's chain so a rebuilt environment keeps working).
+
+It is the first entry on that list that is not a person. Worth being clear about
+what it is: a machine with no mailbox, whose password lives only in this app's
+server environment. It reads the **whole** customer book, because company search
+is how an advisor attaches a case — it is not a reduced-privilege account.
+Revoking it takes ResolveIQ offline for everyone, unlike removing an individual.
+
+The account itself still has to be created in Supabase Auth; the allowlist entry
+grants nothing until it exists.
 
 Auth is the publishable key plus a **signed-in WG account**. The service-role
 key is not supported — it bypasses every permission check, and the app warns
