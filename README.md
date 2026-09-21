@@ -18,6 +18,12 @@ ResolveIQ ──write─►  public.resolveiq_cases   its own cases
           └────────► crm_queue_change ──► on-prem worker ──► Sage CRM
 ```
 
+**Access is gated on ClientiQ's list.** Since ClientiQ's `0027_clientiq_access`,
+reading the customer book requires being in `public.clientiq_access` — seven
+people today. Whatever account ResolveIQ signs in as **must be on that list**,
+or it reads nothing. That list is deliberately curated and belongs to ClientiQ,
+so adding a service account to it is their call, not ResolveIQ's.
+
 Auth is the publishable key plus a **signed-in WG account**. The service-role
 key is not supported — it bypasses every permission check, and the app warns
 loudly if it finds one in its environment.

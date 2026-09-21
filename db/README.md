@@ -22,6 +22,23 @@ were changed **out of band** from this repo:
 |---|---|
 | `0001_activity_feed_resolveiq_branch.sql` | A third `union all` branch, `source = 'resolveiq'` |
 | `0002_company_list_open_case_count.sql` | An `open_cases` column appended |
+| `0006_access_after_clientiq_0027.sql` | Restores writes after ClientiQ 0027, and closes `resolveiq_case_events` |
+
+**Handed over 21 Sep 2026.** Branches are waiting in the owning repos:
+
+| Repo | Branch | File |
+|---|---|---|
+| `simonpaulwright1975-beep/CRM` (ClientiQ) | `resolveiq/view-extensions-handover` | `db/migrations/0028_resolveiq_view_extensions.sql` |
+| `simonpaulwright1975-beep/wg-calls` (Call iQ) | `resolveiq/dialpad-calls-access-handover` | `sql/dialpad_calls_resolveiq_access.sql` |
+
+Both reproduce what is already live, so adopting either is a no-op. Neither has
+a pull request open — that is for their owners to raise.
+
+**The Call iQ one is not a formality.** It breaks a rule that app states in its
+own CLAUDE.md: *"all RLS-on with NO policies — service-role only"*.
+`dialpad_calls` is now the only one of its five tables with a policy and the
+only one in the Realtime publication, and both are ours. The file says so, gives
+the alternative design, and carries a revert block.
 
 **Both need folding into ClientiQ's own migrations.** Otherwise their next
 deploy silently drops ResolveIQ off the feed and blanks the open-case count —
@@ -137,3 +154,41 @@ idempotent per case and cannot double-post.
 Publishable key plus a signed-in WG account. **No service-role key**, ever — it
 bypasses every permission check. The app warns if it finds one in its
 environment.
+
+
+---
+
+## ClientiQ 0027 broke ResolveIQ's writes — and what was done about it
+
+On 21 September, ClientiQ applied `0027_clientiq_access.sql`, locking the
+customer book to a curated list. Right call. Two side effects it did not intend:
+
+**1. ResolveIQ could no longer write anything.** 0027 replaced
+`resolveiq_cases_authenticated` (ALL) with `resolveiq_cases_read` (SELECT).
+`resolveiq_upsert_case` is `security invoker`, so it runs as the signed-in
+user — raising a case, resolving one, recording a cost of failure and storing a
+satisfaction score were all denied. Verified: a probe insert as a real account
+created 0 rows while reads returned fine.
+
+**2. `resolveiq_case_events` was left wide open.** It kept its original
+`using (true)` policy for ALL commands, so every account in the project —
+including the five non-hub logins 0027 exists to shut out — could read and write
+case notes and customer messages. Tightening the parent and missing the child
+left the more sensitive of the two open.
+
+`0006_access_after_clientiq_0027.sql` fixes both, gated on ClientiQ's own
+`clientiq_can_read()` rather than a second list that would drift. **Net access
+is tighter than before 0027**, not looser: case events go from any authenticated
+account to the seven on the list.
+
+Verified end to end as Cerian's account: raise → open, resolve with a
+cost-of-failure decision → resolved with the Sage communication queued, and the
+case event stored. Probe rows and the queued Sage entry were deleted.
+
+### This cuts both ways
+
+ResolveIQ changed two ClientiQ views without telling ClientiQ, and ClientiQ
+broke ResolveIQ's writes without telling ResolveIQ. Same failure, opposite
+directions, a week apart. The fix is the same in both: changes to a shared
+database belong in the owning repo's migration chain, where the other app's
+deploy cannot quietly undo them and the owner can see them coming.
