@@ -457,8 +457,13 @@ export function createApp() {
           case_ref: saved?.case?.case_ref ?? caseFields.case_ref,
           queued_to_sage: Boolean(saved?.queued_to_sage),
           sage_queue_id: saved?.sage_queue_id ?? null,
+          /* The reason comes from the database now rather than being lost:
+             resolveiq_upsert_case records why the queue call failed instead
+             of swallowing it. It only ever tries once per case, so without
+             the reason a silent miss was permanent and undiagnosable. */
           warning: saved?.case?.status === 'resolved' && !saved?.queued_to_sage
             ? 'Saved here, but the Sage CRM copy could not be queued. Reps working in Sage will not see it.'
+              + (saved?.sage_queue_error ? ` (${saved.sage_queue_error})` : '')
             : null
         });
       }
