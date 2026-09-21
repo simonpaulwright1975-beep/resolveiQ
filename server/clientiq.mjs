@@ -229,6 +229,20 @@ export async function resolvedSince(sinceIso, { signal } = {}) {
   )) ?? [];
 }
 
+/* Closed cases and what they cost, for the cost-of-failure report.
+
+   A separate read from resolvedSince: that one covers a couple of days for the
+   KPI row, this one covers months. Narrow select — these rows are summed and
+   grouped, never rendered individually. */
+export async function cofSince(sinceIso, { signal } = {}) {
+  return (await request(
+    `resolveiq_cases?status=eq.resolved&closed_at=gte.${encodeURIComponent(sinceIso)}` +
+      `&select=case_ref,closed_at,cof_status,cof_amount,cof_reason` +
+      `&order=closed_at.desc&limit=5000`,
+    { signal }
+  )) ?? [];
+}
+
 export async function upsertCase({ case: caseFields, event }, { signal } = {}) {
   if (!caseFields?.company_id) {
     throw new ClientiqError(

@@ -28,6 +28,7 @@
     cofSaving: false,
     cofError: null,
     cofDraft: { status: null, amount: '', reason: '', note: '' },
+    cofReportLoading: false,
 
     feedbackUrl: null,
     feedbackError: null
@@ -452,6 +453,120 @@
     }
   }
 
+  /* ---------- the cost of failure report ---------- */
+
+  function gbp(n, pence) {
+    var v = Number(n) || 0;
+    return '\u00A3' + v.toLocaleString('en-GB', {
+      minimumFractionDigits: pence ? 2 : 0,
+      maximumFractionDigits: pence ? 2 : 0
+    });
+  }
+
+  /* Formatted in London, not in whatever zone the browser or server happens to
+     be in. The instant is London midnight on the 1st, which through BST is
+     23:00 UTC on the LAST day of the previous month — so formatting it in UTC
+     labels the whole of summer with the wrong month. */
+  function monthName(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? '' : d.toLocaleDateString('en-GB', {
+      timeZone: 'Europe/London', month: 'long', year: 'numeric'
+    });
+  }
+
+  async function loadCofReport() {
+    var target = $('cof-report');
+    if (!target || state.cofReportLoading) return;
+    state.cofReportLoading = true;
+    target.innerHTML = '<p class="empty">Working out what failure cost…</p>';
+
+    try {
+      var res = await fetch('/api/cof');
+      var body = await window.RESOLVEIQ_readJson(res);
+      if (!res.ok) throw new Error(body.error || 'Could not build the report.');
+      renderCofReport(body);
+    } catch (error) {
+      target.innerHTML = '<p class="empty">' + esc(error.message) + '</p>';
+    } finally {
+      state.cofReportLoading = false;
+    }
+  }
+
+  function renderCofReport(r) {
+    var target = $('cof-report');
+    var period = $('cof-period');
+
+    if (!r.configured) {
+      if (period) period.textContent = '';
+      target.innerHTML = '<p class="empty">' + esc(r.reason || 'Nothing to report yet.') + '</p>';
+      return;
+    }
+
+    var now = r.thisMonth;
+    var prev = r.lastMonth;
+    if (period) period.textContent = monthName(now.from);
+
+    /* Nothing closed at all reads differently from "closed plenty, none of it
+       cost anything" — the second is good news and should say so. */
+    if (!now.closedCount) {
+      target.innerHTML = '<p class="empty">No cases closed yet this month, so there is nothing to cost.</p>';
+      return;
+    }
+
+    var delta = '';
+    if (prev.closedCount) {
+      var diff = now.total - prev.total;
+      delta = diff === 0
+        ? 'level with ' + monthName(prev.from)
+        : (diff > 0 ? '+' : '\u2212') + gbp(Math.abs(diff)) + ' vs ' + monthName(prev.from);
+    }
+
+    /* Stat tiles, not a chart: these are single headline figures. */
+    var tiles = [
+      { label: 'Cost this month', value: gbp(now.total), foot: delta },
+      { label: 'Cases that cost us', value: String(now.costedCount),
+        foot: now.costedPct + '% of ' + now.closedCount + ' closed' },
+      { label: 'Average when it does', value: now.averageCost == null ? '\u2014' : gbp(now.averageCost, true),
+        foot: now.costedCount ? 'across ' + now.costedCount + ' case' + (now.costedCount === 1 ? '' : 's') : '' }
+    ];
+
+    var html = '<div class="cof-tiles">' + tiles.map(function (t) {
+      return '<div class="cof-tile">' +
+        '<div class="label">' + esc(t.label) + '</div>' +
+        '<div class="cof-tile__value num">' + esc(t.value) + '</div>' +
+        '<div class="cof-tile__foot">' + esc(t.foot || '') + '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+
+    if (!now.costedCount) {
+      html += '<p class="cof-none">Nothing has cost the business anything this month. ' +
+        'All ' + now.closedCount + ' closed case' + (now.closedCount === 1 ? '' : 's') +
+        ' were recorded as no cost.</p>';
+      target.innerHTML = html;
+      return;
+    }
+
+    /* One measure across categories, sorted by size: a ranked bar list, single
+       hue. Colouring each reason differently would imply a meaning the data
+       does not have. Every row carries its own figure, so the bar is a shape
+       aid rather than the only way to read it. */
+    var top = now.reasons[0].total || 1;
+    html += '<div class="section"><span class="label">Where it went</span>' +
+      '<div class="bars">' + now.reasons.map(function (x) {
+        var share = Math.round((x.total / now.total) * 100);
+        return '<div class="bar" title="' + esc(x.reason) + ' \u2014 ' +
+            esc(gbp(x.total, true)) + ' across ' + x.count + ' case' +
+            (x.count === 1 ? '' : 's') + ', ' + share + '% of the month">' +
+          '<div class="bar__name"><span>' + esc(x.reason) + '</span></div>' +
+          '<div class="bar__track"><div class="bar__fill" style="width:' +
+            Math.max(2, Math.round((x.total / top) * 100)) + '%"></div></div>' +
+          '<div class="bar__value">' + esc(gbp(x.total)) + ' \u00B7 ' + x.count + '</div>' +
+        '</div>';
+      }).join('') + '</div></div>';
+
+    target.innerHTML = html;
+  }
+
   /* ---------- cost of failure ---------- */
 
   function cofOf(t) { return t.cof || {}; }
@@ -816,7 +931,7 @@
   /* Tabs. The queue stays in the DOM when hidden so the tour, which anchors to
      elements inside it, is unaffected by which tab is showing. */
   function showTab(which) {
-    var pairs = [['tab-queue', 'view-queue'], ['tab-kpis', 'view-kpis']];
+    var pairs = [['tab-queue', 'view-queue'], ['tab-cof', 'view-cof'], ['tab-kpis', 'view-kpis']];
     pairs.forEach(function (pair) {
       var on = pair[0] === which;
       var tab = $(pair[0]);
@@ -848,7 +963,11 @@
 
     document.querySelector('.tabs').addEventListener('click', function (e) {
       var tab = e.target.closest('.tab');
-      if (tab) showTab(tab.id);
+      if (!tab) return;
+      showTab(tab.id);
+      /* Fetched when the tab is opened rather than on every queue refresh —
+         it is a report, not a live figure, and it reads months of cases. */
+      if (tab.id === 'tab-cof') loadCofReport();
     });
 
     $('search').addEventListener('input', function (e) {

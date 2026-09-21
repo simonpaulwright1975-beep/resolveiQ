@@ -91,6 +91,75 @@ test('upsertCase() refuses a case with no company before calling out', async () 
    Reporting it as a credential problem sends whoever is setting this up
    looking in entirely the wrong place — which is exactly what happened the
    first time the live smoke test was run. */
+/* The cost report. These are money figures someone will act on, so the
+   arithmetic is pinned rather than eyeballed. */
+test('the cost report sums, groups and ranks correctly', async () => {
+  await withApp(async (base) => {
+    const post = (ticket, cof) => fetch(`${base}/api/cases`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket, cof })
+    });
+
+    const c = (n, status) => ({ id: `RQ-RPT-${n}`, companyId: 23508,
+                                subject: `Report case ${n}`, status: status || 'resolved' });
+
+    await post(c(1), { status: 'cost', amount: 100, reason: 'Re-delivery' });
+    await post(c(2), { status: 'cost', amount: 50.50, reason: 'Re-delivery' });
+    await post(c(3), { status: 'cost', amount: 200, reason: 'Goodwill gesture' });
+    await post(c(4), { status: 'none' });
+    await post(c(5), { status: 'none' });
+
+    const r = await (await fetch(`${base}/api/cof`)).json();
+    const m = r.thisMonth;
+
+    assert.equal(m.closedCount, 5, 'every closed case counts toward the denominator');
+    assert.equal(m.costedCount, 3, 'only the ones that cost something');
+    assert.equal(m.total, 350.5, '100 + 50.50 + 200');
+    assert.equal(m.costedPct, 60, '3 of 5');
+
+    /* Averaged across the cases that cost something, not across all five —
+       diluting it with the free ones makes the figure meaningless. */
+    assert.equal(m.averageCost, 116.83, '350.50 / 3, to the penny');
+
+    /* Ranked by size, so the biggest cause is first. */
+    assert.equal(m.reasons[0].reason, 'Goodwill gesture');
+    assert.equal(m.reasons[0].total, 200);
+    assert.equal(m.reasons[1].reason, 'Re-delivery');
+    assert.equal(m.reasons[1].total, 150.5, 'two re-deliveries add up');
+    assert.equal(m.reasons[1].count, 2);
+  });
+});
+
+test('a month with no cost is not the same as a month with no cases', async () => {
+  const { deriveMetrics } = await import('../server/index.mjs');
+  const { readFileSync } = await import('node:fs');
+
+  /* The distinction has to survive into the UI, because "nothing cost us
+     anything" is good news and "nothing has been closed" is not news at all. */
+  const app = readFileSync('assets/app.js', 'utf8');
+  assert.match(app, /No cases closed yet this month/,
+    'an empty month says so rather than reporting a zero');
+  assert.match(app, /Nothing has cost the business anything this month/,
+    'a free month is reported as a result, not as an empty chart');
+  assert.ok(typeof deriveMetrics === 'function');
+});
+
+test('the cost report reads one measure, so it uses one hue', async () => {
+  const { readFileSync } = await import('node:fs');
+  const app = readFileSync('assets/app.js', 'utf8');
+
+  /* Reason is an identity dimension but cost is a single measure. Assigning a
+     different hue per reason would imply a meaning the data does not carry,
+     and would need a ten-colour categorical palette to stay CVD-safe. */
+  const report = app.slice(app.indexOf('function renderCofReport'));
+  assert.doesNotMatch(report.slice(0, 4000), /--chart-|hsl\(|categorical/,
+    'no per-category colour assignment in the cost breakdown');
+
+  /* Every bar carries its own figure, which is what discharges the pale
+     track's low contrast against the card. */
+  assert.match(report.slice(0, 4000), /bar__value/, 'each row is directly labelled');
+});
+
 /* Cost of failure. The point of the feature is the gate, so that is what gets
    pinned: a case that has not been costed cannot be closed. */
 test('a case cannot be closed without a cost-of-failure decision', async () => {

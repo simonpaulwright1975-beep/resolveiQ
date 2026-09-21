@@ -347,6 +347,60 @@ button.primary:hover { background: var(--accent-2); border-color: var(--accent-2
   color: #fff;
 }
 
+/* ---------- the cost of failure report ---------- */
+
+.cof-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.cof-tile {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+/* BRAND.md big-number step. Tabular figures so a column of money lines up. */
+.cof-tile__value {
+  margin-top: 4px;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+}
+
+.cof-tile__foot {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 1em;
+}
+
+.cof-none {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--good-bg);
+  color: var(--good);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Reasons are far longer than intent names, so the label column needs more
+   room than the queue chart's 132px. 240px fits the longest default reason
+   ("Write-off or scrapped stock"); anything longer still gets an ellipsis and
+   the full text in the row's title, but the defaults should never truncate. */
+#cof-report .bar { grid-template-columns: 240px 1fr auto; }
+#cof-report .bar__value { min-width: 84px; }
+
+@media (max-width: 620px) {
+  #cof-report .bar { grid-template-columns: 1fr auto; }
+  #cof-report .bar__track { display: none; }
+}
+
 /* ---------- cost of failure ---------- */
 
 .cof--undecided {

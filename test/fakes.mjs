@@ -160,6 +160,18 @@ export function fakeClientiq({ failWith = null, queueFails = false, signInFails 
       });
     }
 
+    /* Resolved cases, for the KPI row and the cost report. CASES is the open
+       queue fixture, so these come from what the tests have actually stored —
+       otherwise the report would sum fixtures nobody closed. */
+    if (req.url.startsWith('/rest/v1/resolveiq_cases?status=eq.resolved')) {
+      const since = decodeURIComponent((req.url.match(/closed_at=gte\.([^&]+)/) || [])[1] || '');
+      const from = since ? new Date(since).getTime() : 0;
+      return json(200, [...stored.values()].filter((r) =>
+        r.status === 'resolved' &&
+        r.closed_at &&
+        new Date(r.closed_at).getTime() >= from));
+    }
+
     if (req.url.startsWith('/rest/v1/resolveiq_cases')) return json(200, CASES);
     if (req.url.startsWith('/rest/v1/vw_crm_companies')) return json(200, [COMPANY]);
     if (req.url.startsWith('/rest/v1/vw_crm_company_contacts')) return json(200, []);

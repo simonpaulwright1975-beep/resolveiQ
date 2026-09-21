@@ -87,6 +87,8 @@
     <div class="tabs" role="tablist" aria-label="Main views">
       <button class="tab" id="tab-queue" role="tab" aria-selected="true"
               aria-controls="view-queue">Live queue</button>
+      <button class="tab" id="tab-cof" role="tab" aria-selected="false"
+              aria-controls="view-cof">Cost of failure</button>
       <button class="tab" id="tab-kpis" role="tab" aria-selected="false"
               aria-controls="view-kpis">What the numbers mean</button>
     </div>
@@ -121,6 +123,15 @@
         </table>
       </div>
       <p class="empty" id="empty" hidden>Nothing matches that filter.</p>
+    </section>
+
+    <section class="card panel" id="view-cof" role="tabpanel"
+             aria-labelledby="tab-cof" hidden>
+      <div class="panel__head">
+        <span class="label">Cost of failure</span>
+        <span class="label" id="cof-period"></span>
+      </div>
+      <div id="cof-report"></div>
     </section>
 
     <section class="card panel kpi-guide" id="view-kpis" role="tabpanel"

@@ -28,7 +28,7 @@ loudly if it finds one in its environment.
 npm install
 cp .env.example .env     # ClientiQ account + an Anthropic key
 npm start                # http://localhost:3000  (console: /console)
-npm test                 # 45 tests, no credentials needed
+npm test                 # 48 tests, no credentials needed
 ```
 
 It runs with nothing configured: no ClientiQ means the sample queue, no API key
@@ -97,6 +97,30 @@ is already closed, and the case stays closed.
 **An absent `cof` key means "leave it alone".** That distinction matters: if an
 ordinary save sent `{status: null}`, every save that happened to omit a decision
 would silently clear one already made.
+
+### The report
+
+A **Cost of failure** tab summarises the current month against the last:
+
+| | |
+|---|---|
+| Cost this month | Sum of recorded amounts, with the change on last month |
+| Cases that cost us | How many, and what share of everything closed |
+| Average when it does | Averaged across the cases that **cost something**, not across all closed cases — diluting it with the free ones makes the figure meaningless |
+| Where it went | Reasons ranked by total, each row labelled with its amount and case count |
+
+Two empty states, deliberately different: *nothing closed yet this month* is
+not news, whereas *everything closed and none of it cost anything* is a result
+and says so.
+
+Reasons are grouped by the text recorded on the case, so editing `COF_REASONS`
+later cannot retitle history.
+
+**One hue, not ten.** Reason is an identity dimension but cost is a single
+measure, so every bar is the brand accent and the list is ranked by size.
+Colouring each reason differently would imply a meaning the data does not carry
+and would need a ten-colour palette to stay colourblind-safe. Every row carries
+its own figure, so the bar is a shape aid rather than the only way to read it.
 
 The reasons are configuration (`COF_REASONS`), not code — this is a business
 taxonomy that will change, and adding a line to it should not need a deploy.
@@ -252,6 +276,7 @@ regenerate it from the PNG if the artwork is ever revised.
 | `GET` | `/api/companies?q=` | Company search, for attaching a case. |
 | `GET` | `/api/contacts?company_id=` | People at a company, for the contact picker. |
 | `GET` | `/api/sage-status?queue_id=` | Where a queued Sage CRM change has got to. |
+| `GET` | `/api/cof` | Cost of failure this month and last, with the breakdown by reason. |
 | `GET` | `/api/feedback/link?case_id=` | Mint the rating link an advisor pastes into a reply. |
 | `GET` | `/api/feedback/case?c=&t=` | **Public.** What the rating page needs to render: case reference only. |
 | `POST` | `/api/feedback` | **Public.** Record a score of 1–5 against the token's case. |
@@ -277,7 +302,7 @@ App settings are namespaced `RESOLVEIQ_*` so they can't collide with an ambient
 
 ## Testing
 
-`npm test` runs 45 tests against fake ClientiQ and Anthropic servers speaking
+`npm test` runs 48 tests against fake ClientiQ and Anthropic servers speaking
 the real wire formats — the client, mapping, HTTP surface and error paths, with
 no credentials or network.
 

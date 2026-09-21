@@ -151,6 +151,16 @@ export function londonMidnight(daysAgo = 0, now = new Date()) {
   return new Date(localMidnight.getTime() - londonOffsetMinutes(localMidnight) * 60000);
 }
 
+/* Start of a calendar month in London, n months back from the current one. */
+function londonMonthStart(monthsAgo = 0, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London', year: 'numeric', month: '2-digit'
+  }).formatToParts(now);
+  const get = (type) => Number(parts.find((p) => p.type === type).value);
+  const first = new Date(Date.UTC(get('year'), get('month') - 1 - monthsAgo, 1));
+  return new Date(first.getTime() - londonOffsetMinutes(first) * 60000);
+}
+
 const mean = (values) =>
   values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 
@@ -226,6 +236,44 @@ export function deriveMetrics(tickets, base, resolved = []) {
     cofReasons: config.cofReasons,
     resolvedWithinSlaToday: today.length ? Math.round((withinSla / today.length) * 100) : null,
     openCount: open.length
+  };
+}
+
+/* Cost of failure, summarised.
+
+   Every figure is a sum of what was recorded against real cases. A month with
+   nothing in it reports zero cost and zero cases, which is a fact; a month with
+   nothing CLOSED reports null, because an average over no cases is unknown. */
+function summariseCof(rows, from, to) {
+  const inWindow = (r) => {
+    const t = new Date(r.closed_at).getTime();
+    return Number.isFinite(t) && t >= from.getTime() && (!to || t < to.getTime());
+  };
+
+  const closed = rows.filter(inWindow);
+  const costed = closed.filter((r) => r.cof_status === 'cost' && r.cof_amount != null);
+  const total = costed.reduce((sum, r) => sum + Number(r.cof_amount), 0);
+
+  /* Grouped by the reason as it was recorded, so a later edit to the reason
+     list cannot retitle history. */
+  const byReason = new Map();
+  for (const r of costed) {
+    const key = r.cof_reason || 'Unrecorded';
+    const entry = byReason.get(key) || { reason: key, total: 0, count: 0 };
+    entry.total += Number(r.cof_amount);
+    entry.count += 1;
+    byReason.set(key, entry);
+  }
+
+  return {
+    closedCount: closed.length,
+    costedCount: costed.length,
+    total: Math.round(total * 100) / 100,
+    /* Average across the cases that cost something, not across everything —
+       diluting it by the free ones makes the figure meaningless. */
+    averageCost: costed.length ? Math.round((total / costed.length) * 100) / 100 : null,
+    costedPct: closed.length ? Math.round((costed.length / closed.length) * 100) : null,
+    reasons: [...byReason.values()].sort((a, b) => b.total - a.total)
   };
 }
 
@@ -421,6 +469,27 @@ export function createApp() {
         const companyId = url.searchParams.get('company_id');
         if (!companyId) return sendJson(res, 400, { error: 'company_id is required' });
         return sendJson(res, 200, { history: await clientiq.activity(companyId) });
+      }
+
+      /* What failure is costing, this month against last. */
+      if (url.pathname === '/api/cof') {
+        if (!clientiqConfigured) {
+          return sendJson(res, 200, {
+            configured: false,
+            reason: 'ClientiQ is not configured, so there are no cases to report on.'
+          });
+        }
+
+        const thisMonth = londonMonthStart(0);
+        const lastMonth = londonMonthStart(1);
+        const rows = await clientiq.cofSince(lastMonth.toISOString());
+
+        return sendJson(res, 200, {
+          configured: true,
+          currency: 'GBP',
+          thisMonth: { from: thisMonth.toISOString(), ...summariseCof(rows, thisMonth, null) },
+          lastMonth: { from: lastMonth.toISOString(), ...summariseCof(rows, lastMonth, thisMonth) }
+        });
       }
 
       /* ---------- CSAT ----------
