@@ -220,12 +220,21 @@ button.primary:hover { background: var(--accent-2); border-color: var(--accent-2
 
 .kpi { padding: 15px 17px 16px; }
 
+/* BRAND.md's anti-dull token: "a page built from --ink alone reads flat and
+   dull, however correct the hex is". The figure is what the advisor's eye
+   goes to first, so it is the thing worth lifting off the body ink.
+
+   --green-mid is 4.3:1 on white, short of the 4.5:1 body-text minimum and
+   allowed here only because 34px/800 clears the large-text bar of 3:1. It
+   belongs on this line and not on the label or the delta above and below it,
+   both of which are small. */
 .kpi__value {
   font-size: 34px;
   font-weight: 800;
   letter-spacing: -.03em;
   line-height: 1.05;
   margin: 7px 0 5px;
+  color: var(--green-mid);
 }
 
 .kpi__delta { font-size: 12px; font-weight: 650; }
@@ -313,7 +322,12 @@ button.primary:hover { background: var(--accent-2); border-color: var(--accent-2
   gap: 2px;
 }
 
-.gauge__pct { font-size: 31px; font-weight: 800; letter-spacing: -.03em; }
+/* The app's own "What the numbers mean" tab lists SLA compliance alongside
+   the other six, so this is a KPI figure too and takes --green-mid with them.
+   Leaving it on --ink would split two numbers the app itself calls KPIs.
+   31px/800 clears the large-text bar the same way .kpi__value does, and the
+   lighter figure inside the darker --accent ring reads as hierarchy. */
+.gauge__pct { font-size: 31px; font-weight: 800; letter-spacing: -.03em; color: var(--green-mid); }
 .gauge__foot { margin-top: 10px; font-size: 13px; color: var(--ink-2); text-align: center; }
 .gauge__foot strong { color: var(--accent-ink); }
 
