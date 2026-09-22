@@ -574,7 +574,33 @@ button.cof__opt--on:hover {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -.01em;
+  display: flex;
+  align-items: center;
+  gap: 11px;
 }
+
+/* The one place --logo-deep has a job: BRAND.md reserves it for "icon glyphs
+   on mint fills", and this is the app's only mint fill. It lives here rather
+   than on the KPI cards themselves because this tab has the room and the
+   icons help scanning, where on the dense KPI row a tile cost 10px of height
+   and pulled the eye off the figure.
+
+   #004030 on #80d0b0 is 6.51:1, against 4.55:1 if --accent were used — the
+   reason the token exists at all. The glyph inherits currentColor so the
+   token drives it and no hex is buried in the markup. Decorative, so the
+   spans are aria-hidden and the heading still reads as its text alone. */
+.kpi-guide__icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--logo-deep);
+  display: grid;
+  place-items: center;
+}
+
+.kpi-guide__icon svg { width: 19px; height: 19px; display: block; }
 
 .kpi-guide__item p { margin: 0 0 8px; font-size: 14px; }
 .kpi-guide__item p:last-child { margin-bottom: 0; }
